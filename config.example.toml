@@ -1,4 +1,8 @@
-# Copy to config.toml and fill in. Do NOT commit config.toml (the iCal URL contains a private token).
+# Copy to config.toml and fill in. Do NOT commit config.toml (the iCal URL contains a
+# private token).
+#
+# TOML note: every bare key must stay above the first [section] header. A bare key
+# written after [google] silently becomes google.<key> instead of a top-level setting.
 
 # Courses to keep: course numbers (best) or a unique part of the title.
 # Run `python tiss_sync.py list` to see what is in your feed.
@@ -7,17 +11,42 @@ courses = [
   "185.A91",
   "104.265",
   # "Algorithmen und Datenstrukturen",
+  # "no lectures",   # add this to keep the TISS holiday / break markers
 ]
 
-# Events whose title contains any of these are dropped (case-insensitive)
+# Events whose title or CATEGORIES contain any of these are dropped (case-insensitive).
+# Useful for stale semesters in a TUWEL feed, e.g. "-2025W".
 exclude_keywords = ["Sprechstunde"]
 
+# Hide exercise slots you cannot attend yet.
+# Before you pick an exercise group, TISS publishes the whole span the groups run in -
+# often once per room - even though your slot will be a single hour in one room. Any
+# timed event at least this long is treated as an unregistered placeholder and skipped;
+# real lectures run 1-2 h. All-day events (holiday markers) are never affected.
+# Set to 0 to disable and see everything.
+placeholder_min_hours = 4
+
+# If two events share a course, title and exact time, merge them into one and list both
+# rooms. Also folds an exam held in several parallel rooms into a single event.
+merge_parallel_rooms = true
+
+[titles]
+# Calendar titles, keyed by course number. The number itself is dropped from the title,
+# and a long name can be shortened here. A course with no entry keeps its TISS name
+# minus the number. These also name the exams: "EXAM VU ASE Test 1".
+# For TUWEL, whose titles never mention the course, the label is put in front instead.
+# "194.187" = "VU ASE"
+# "192.161" = "VU MoGD"
+
 [tiss]
-# TISS -> your calendar -> iCal export / subscribe link (or a path to a downloaded .ics file)
+# TISS -> your calendar -> iCal export / subscribe link (or a path to a downloaded .ics).
+# Any .ics URL works here, including a TUWEL export - see tuwel.example.toml.
 ical_url = "https://tiss.tuwien.ac.at/PASTE_YOUR_ICAL_LINK"
 
 [semester]
 # Only events inside this window are synced. This alone removes last year's courses.
+# Exams and registration deadlines from [scrape] are exempt: a retake exam often falls
+# outside the lecture window but is exactly what you want reminding about.
 start = "2026-10-01"
 end   = "2027-02-28"
 
@@ -26,9 +55,35 @@ end   = "2027-02-28"
 # (Google Calendar -> Settings -> that calendar -> "Calendar ID").
 calendar_id = "xxxxxxxx@group.calendar.google.com"
 
+[scrape]
+# Course pages carry what the iCal feed does not: exam dates, exam registration windows,
+# and course / exercise-group registration deadlines. This works even for courses you
+# are not registered for yet. Leave `courses` empty to skip scraping entirely.
+# Course numbers with or without the dot; the semester code is TISS's own ("2026W").
+courses = []
+semester = "2026W"
+# Which registration reminders to create. Course and group sign-up happens once at the
+# start of term, so you may want only "exam" after the first weeks.
+registration_kinds = ["exam", "course", "group"]
+# Remind before a window closes as well as when it opens.
+registration_close_reminder = true
+
+[retention]
+# With a daily sync the calendar fills up with lectures you already attended and
+# reminders for deadlines long gone. Prune those once they are over.
+prune_past = false
+# ...but keep these even when past, so the dates stay available to look up later.
+keep_past_kinds = ["exam"]
+# Matched against title and description. Note TISS writes the same kind of session both
+# as "Algorithmics Q&A" and as "Q & A 2", hence both spellings.
+keep_past_keywords = ["Exercise", "Q&A", "Q & A", "Test", "Prüfung"]
+
 [reminders]
 lecture_minutes_before = [15]
 # Exams / tests / submissions: 3 days and 1 day before
 exam_minutes_before = [4320, 1440]
 exam_keywords = ["Prüfung", "Exam", "Test", "Klausur", "Abgabe", "Deadline"]
 exam_color_id = "11"   # red
+# Registration: a day ahead so you can plan, and again the moment the window opens.
+registration_minutes_before = [1440, 0]
+registration_color_id = "5"   # banana
