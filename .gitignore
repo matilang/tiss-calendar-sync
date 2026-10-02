@@ -17,6 +17,8 @@ sync.log
 # Exported calendars and the pre-cleanup backup: your personal timetable, and
 # large. No reason to have them in git.
 *.ics
+# ...but the test fixture must be in the repo, or CI has nothing to run against.
+!tests/fixtures/*.ics
 deleted_untagged_backup.json
 
 # --- scratch ---------------------------------------------------------------

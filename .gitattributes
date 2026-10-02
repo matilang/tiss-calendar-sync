@@ -7,3 +7,7 @@
 
 # Windows batch stays CRLF - that is what cmd.exe expects.
 *.cmd text eol=crlf
+
+# Test fixtures are frozen snapshots: keep them byte-for-byte as saved, so a checkout
+# on another machine cannot change what the parsers see.
+tests/fixtures/** -text
