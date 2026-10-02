@@ -18,6 +18,7 @@ token.json
 .venv/
 __pycache__/
 *.pyc
+.pytest_cache/
 sync.log
 
 # Exported calendars and the pre-cleanup backup: your personal timetable, and

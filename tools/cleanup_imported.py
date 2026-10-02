@@ -9,8 +9,8 @@ twice, plus the courses you did not select.
 This script deletes exactly the events on the configured calendar that have **no**
 tiss_sync marker. Everything the sync created is left alone.
 
-  python cleanup_imported.py          # show what would be deleted, change nothing
-  python cleanup_imported.py --apply  # actually delete, after writing a backup
+  python tools/cleanup_imported.py          # show what would go, change nothing
+  python tools/cleanup_imported.py --apply  # actually delete, after writing a backup
 
 The backup is a full JSON dump of every deleted event, so a mistake is recoverable.
 """
@@ -22,10 +22,15 @@ import json
 import sys
 from pathlib import Path
 
-from googleapiclient.errors import HttpError
+# The repository root, not this directory: settings.toml and service_account.json live
+# there, and so do the modules imported below.
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
 
-from gcal_auth import get_service
-from tiss_sync import _execute, load_config
+from googleapiclient.errors import HttpError        # noqa: E402
+
+from gcal_auth import get_service                   # noqa: E402
+from tiss_sync import _execute, load_config         # noqa: E402
 
 BACKUP = "deleted_untagged_backup.json"
 
@@ -37,7 +42,7 @@ def main() -> None:
     ap.add_argument("-c", "--config", default="settings.toml")
     args = ap.parse_args()
 
-    base = Path(__file__).resolve().parent
+    base = ROOT
     settings = load_config(base / args.config)
     svc = get_service(base)
     cal_id = settings.calendar_id

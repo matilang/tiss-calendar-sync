@@ -10,7 +10,7 @@ the commands you already use working unchanged.
 
 Equivalent to `python -m tisscal.cli`. Kept as a file because the scheduled task, the
 GitHub Actions workflow and sync_daily.cmd all invoke it by name, and because the names
-re-exported below are what cleanup_imported.py, check_cloud_run.py and the tests import.
+re-exported below are what check_cloud_run.py, tools/ and the tests import.
 
 See tisscal/__init__.py for what lives in which module.
 """

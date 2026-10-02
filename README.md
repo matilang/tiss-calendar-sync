@@ -84,7 +84,7 @@ import — but then there are no automatic updates.
 python tiss_sync.py list|preview|export|sync [-c settings.toml]
 python tiss_scrape.py 186814 194187        # exam dates, registration windows, group hours
 python tiss_scrape.py 186814 --json
-python cleanup_imported.py [--apply]       # remove events imported into the calendar by hand
+python tools/cleanup_imported.py [--apply] # remove events imported into the calendar by hand
 python check_cloud_run.py --canary         # prove a GitHub Actions run reached the calendar
 python -m pytest                           # 79 tests, no network (pip install -r requirements-dev.txt)
 ```
