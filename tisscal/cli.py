@@ -8,12 +8,11 @@ from pathlib import Path
 
 from icalendar import Calendar, Event
 
-from .config import load_config
-from .events import scraped_events
-from .feed import fetch_feed, parse_feed
 from .classify import is_exam
+from .config import Settings, load_config
+from .feed import fetch_feed, parse_feed
 from .gcal import cmd_sync
-from .model import SOURCE_TAG, Lecture
+from .model import Lecture
 from .pipeline import build_events
 from .titles import display_title
 
@@ -33,13 +32,14 @@ def cmd_list(events: list[Lecture]) -> None:
     print("\nCopy the course numbers you want into `courses = [...]` in config.toml.")
 
 
-def cmd_preview(events: list[Lecture], cfg: dict) -> None:
+def cmd_preview(events: list[Lecture], settings: Settings) -> None:
     marks = {"exam": "[EXAM]", "registration": "[REGISTER]"}
     for ev in events:
-        flag = marks.get(ev.kind) or ("[DEADLINE]" if is_exam(ev, cfg) else "")
+        flag = marks.get(ev.kind) or ("[DEADLINE]" if is_exam(ev, settings.reminders) else "")
         when = ev.start_dt.strftime("%a %d.%m.%y %H:%M")
         # display_title, not ev.summary, so the preview shows the real calendar title
-        print(f"{when}  {flag:<11} {display_title(ev, cfg)[:54]:<54} {ev.location[:24]}")
+        title = display_title(ev, settings.titles, settings.exercises)
+        print(f"{when}  {flag:<11} {title[:54]:<54} {ev.location[:24]}")
     kinds = defaultdict(int)
     for ev in events:
         kinds[ev.kind] += 1
@@ -47,7 +47,7 @@ def cmd_preview(events: list[Lecture], cfg: dict) -> None:
     print(f"\n{len(events)} events would be synced  ({summary}).")
 
 
-def cmd_export(events: list[Lecture], cfg: dict, out: Path) -> None:
+def cmd_export(events: list[Lecture], out: Path) -> None:
     cal = Calendar()
     cal.add("prodid", "-//tiss_sync//EN")
     cal.add("version", "2.0")
@@ -78,23 +78,24 @@ def main() -> None:
     # service_account.json all live next to the repository root.
     base = Path(__file__).resolve().parent.parent
     cfg_path = Path(args.config) if Path(args.config).is_absolute() else base / args.config
-    cfg = load_config(cfg_path)
-    cfg["_tag"] = f"{SOURCE_TAG}-{cfg_path.stem}"  # separate configs never delete each other's events
+    # load_config derives the event tag from the file name, so config.toml and
+    # tuwel.toml own separate events and neither can delete the other's.
+    settings = load_config(cfg_path)
 
-    events = parse_feed(fetch_feed(cfg["tiss"]["ical_url"]))
+    events = parse_feed(fetch_feed(settings.ical_url))
 
     if args.command == "list":
         cmd_list(events)  # unfiltered on purpose, so you see everything
         return
 
-    events = build_events(events, cfg)
+    events = build_events(events, settings)
 
     if args.command == "preview":
-        cmd_preview(events, cfg)
+        cmd_preview(events, settings)
     elif args.command == "export":
-        cmd_export(events, cfg, Path(args.out))
+        cmd_export(events, Path(args.out))
     elif args.command == "sync":
-        cmd_sync(events, cfg, base)
+        cmd_sync(events, settings, base)
 
 
 if __name__ == "__main__":

@@ -19,8 +19,9 @@ filters, merge, titles and classify are pure functions - events in, events out -
 why they are the part covered by tests. Nothing there touches the network or Google.
 Read pipeline.py first: it is the order, and most steps are only correct where they sit.
 """
-from .config import load_config
+from .config import SOURCE_TAG, ConfigError, Settings, load_config
 from .feed import fetch_feed, parse_feed
-from .model import SOURCE_TAG, VIENNA, Lecture
+from .model import VIENNA, Lecture
 
-__all__ = ["Lecture", "VIENNA", "SOURCE_TAG", "load_config", "fetch_feed", "parse_feed"]
+__all__ = ["ConfigError", "Lecture", "SOURCE_TAG", "Settings", "VIENNA", "fetch_feed",
+           "load_config", "parse_feed"]

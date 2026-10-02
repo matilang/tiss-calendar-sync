@@ -38,22 +38,29 @@ def course_html() -> str:
 
 
 @pytest.fixture
-def cfg() -> dict:
-    """A config covering the whole semester of the fixture, with features on."""
-    return {
+def cfg():
+    """Settings covering the whole fixture semester, with the features switched on.
+
+    Built from a dict through the same loader the real config goes through, so a change
+    to validation or defaults shows up here instead of only in production.
+    """
+    from tisscal.config import from_dict
+
+    return from_dict({
         "courses": [],
         "exclude_keywords": ["Sprechstunde"],
         "placeholder_min_hours": 4,
         "merge_parallel_rooms": True,
         "semester": {"start": "2026-10-01", "end": "2027-02-28"},
         "google": {"calendar_id": "test@group.calendar.google.com"},
+        "tiss": {"ical_url": "https://example.invalid/feed.ics"},
         "titles": {"186.814": "VU Algorithmics", "194.187": "VU ASE",
                    "192.161": "VU MoGD"},
         "exercises": {"hide_for": [], "keywords": ["Exercise", "Übung"],
                       "type_code": "UE"},
         "retention": {"prune_past": False, "keep_past_kinds": ["exam"],
                       "keep_past_keywords": ["Exercise", "Q&A", "Q & A"]},
-        "scrape": {},
+        "scrape": {"courses": []},
         "reminders": {
             "lecture_minutes_before": [15],
             "exam_minutes_before": [4320, 1440],
@@ -63,8 +70,7 @@ def cfg() -> dict:
             "group_registration_minutes_before": [0],
             "registration_color_id": "5",
         },
-        "_tag": "tiss_sync-test",
-    }
+    }, tag="tiss_sync-test")
 
 
 def make_event(course_nr="186.814", summary="186.814 VU Algorithmics",
@@ -82,12 +88,25 @@ def make_event(course_nr="186.814", summary="186.814 VU Algorithmics",
                      description=description, course_nr=course_nr, kind=kind, scope=scope)
 
 
-def shift(cfg_dict: dict, **sections) -> dict:
-    """cfg with some sections replaced, without mutating the fixture."""
-    out = dict(cfg_dict)
-    for key, value in sections.items():
-        out[key] = {**out.get(key, {}), **value} if isinstance(value, dict) else value
-    return out
+def shift(settings, **changes):
+    """Settings with some sections changed, without mutating the fixture.
+
+    A section given as a dict is merged into the existing one, so a test can override a
+    single option: shift(cfg, exercises={"hide_for": ["186.814"]}).
+    """
+    import dataclasses
+
+    patch = {}
+    for name, value in changes.items():
+        current = getattr(settings, name)
+        if isinstance(value, dict) and dataclasses.is_dataclass(current):
+            value = {k: tuple(v) if isinstance(v, list) else v for k, v in value.items()}
+            patch[name] = dataclasses.replace(current, **value)
+        elif isinstance(value, list):
+            patch[name] = tuple(value)
+        else:
+            patch[name] = value
+    return dataclasses.replace(settings, **patch)
 
 
 @pytest.fixture(autouse=True)

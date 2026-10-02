@@ -6,8 +6,10 @@ from what tisscal.scrape reads off the course page.
 from __future__ import annotations
 
 from collections import defaultdict
+from typing import Mapping
 from datetime import datetime, timedelta
 
+from .config import Scrape
 from .model import VIENNA, Lecture
 from .titles import course_label
 
@@ -35,7 +37,7 @@ def _at(iso: str) -> datetime | None:
         return None
 
 
-def scraped_events(cfg: dict, scraper=None) -> list[Lecture]:
+def scraped_events(scrape: Scrape, titles: Mapping[str, str], scraper=None) -> list[Lecture]:
     """Exam dates and registration deadlines from the TISS course pages.
 
     The iCal feed has neither: it only lists lectures, and only for courses you are
@@ -43,8 +45,7 @@ def scraped_events(cfg: dict, scraper=None) -> list[Lecture]:
     for the "opens" reminder - there is nothing left to warn about - but their closing
     reminder is kept while the window is still open.
     """
-    spec = cfg.get("scrape", {})
-    numbers = [str(c) for c in spec.get("courses", [])]
+    numbers = [str(c) for c in scrape.courses]
     if not numbers:
         return []
 
@@ -53,12 +54,12 @@ def scraped_events(cfg: dict, scraper=None) -> list[Lecture]:
         # only syncs the iCal feed. Injectable so tests need no network.
         from .scrape import scrape as scraper
 
-    semester = spec.get("semester", "2026W")
-    want_close = spec.get("registration_close_reminder", True)
+    semester = scrape.semester
+    want_close = scrape.registration_close_reminder
     # Which registration reminders are worth having. Course and group sign-up happens
     # once at the start of term, so they are dead weight afterwards; exam registration
     # windows keep opening throughout the semester.
-    kinds = set(spec.get("registration_kinds", ["exam", "course", "group"]))
+    kinds = set(scrape.registration_kinds)
     now = datetime.now(VIENNA)
     out: list[Lecture] = []
 
@@ -67,7 +68,7 @@ def scraped_events(cfg: dict, scraper=None) -> list[Lecture]:
         dotted = nr if "." in nr else f"{nr[:3]}.{nr[3:]}"
         # Use the configured short name so exams read "EXAM VU ASE Test 1" rather
         # than a bare number - stripping the number outright would leave "EXAM Test 1".
-        pretty = course_label(dotted, cfg) or dotted
+        pretty = course_label(dotted, titles) or dotted
 
         # One registration window usually covers several sittings: 192.161's exams on
         # 08.01 and 11.01 share a single window, and 194.187 runs each test in up to five

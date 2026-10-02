@@ -95,7 +95,8 @@ class TestScrapedEvents:
     def build(self, course):
         """scraped_events with the fetch injected - no network, no monkeypatching."""
         def _build(cfg):
-            return T.scraped_events(cfg, scraper=lambda numbers, semester: [course])
+            return T.scraped_events(cfg.scrape, cfg.titles,
+                                    scraper=lambda numbers, semester: [course])
         return _build
 
     def test_builds_one_event_per_exam(self, cfg_scrape, build):
@@ -144,4 +145,4 @@ class TestScrapedEvents:
         assert all(e.start_dt > now - timedelta(days=1) for e in regs)
 
     def test_scraping_is_skipped_without_courses(self, cfg):
-        assert T.scraped_events(cfg) == []
+        assert T.scraped_events(cfg.scrape, cfg.titles) == []

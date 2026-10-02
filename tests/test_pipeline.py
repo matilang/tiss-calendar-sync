@@ -7,35 +7,41 @@ import tiss_sync as T
 from conftest import make_event, shift
 
 
+def _filter(events, settings):
+    """filter_events with the three slices it needs pulled off Settings."""
+    return T.filter_events(events, settings.semester, settings.courses,
+                           settings.exclude_keywords)
+
+
 class TestFilter:
     def test_keeps_only_the_semester_window(self, events, cfg):
-        kept = T.filter_events(events, cfg)
+        kept = _filter(events, cfg)
         summaries = {e.summary for e in kept}
         # July 2026 and March 2027 both fall outside 2026-10-01 .. 2027-02-28
         assert not any("Database Systems" in s for s in summaries)
         assert not any("Knowledge Graphs" in s for s in summaries)
 
     def test_exclude_keyword_drops_an_event(self, events, cfg):
-        assert not [e for e in T.filter_events(events, cfg)
+        assert not [e for e in _filter(events, cfg)
                     if "Sprechstunde" in e.description]
 
     def test_exclude_keyword_also_matches_categories(self, events, cfg):
         """TUWEL keeps last year's course instances; the semester is only in CATEGORIES."""
-        kept = T.filter_events(events, shift(cfg, exclude_keywords=["-2025W"]))
+        kept = _filter(events, shift(cfg, exclude_keywords=["-2025W"]))
         assert not [e for e in kept if "2025W" in e.categories]
         assert [e for e in kept if e.categories == "192.161-2026W"]
 
     def test_course_filter_by_number(self, events, cfg):
-        kept = T.filter_events(events, shift(cfg, courses=["186.814"]))
+        kept = _filter(events, shift(cfg, courses=["186.814"]))
         assert kept and {e.course_nr for e in kept} == {"186.814"}
 
     def test_course_filter_matches_categories_too(self, events, cfg):
         """A TUWEL deadline has the number nowhere but in CATEGORIES."""
-        kept = T.filter_events(events, shift(cfg, courses=["192.161"]))
+        kept = _filter(events, shift(cfg, courses=["192.161"]))
         assert [e for e in kept if e.summary.startswith("Project Report")]
 
     def test_empty_filter_keeps_everything_in_window(self, events, cfg):
-        kept = T.filter_events(events, shift(cfg, exclude_keywords=[]))
+        kept = _filter(events, shift(cfg, exclude_keywords=[]))
         assert len(kept) == len(events) - 2  # minus the two out-of-window events
 
 
@@ -66,11 +72,11 @@ class TestPlaceholders:
 
 class TestHideExercises:
     def test_nothing_hidden_when_list_is_empty(self, events, cfg):
-        assert len(T.hide_exercises(events, cfg)) == len(events)
+        assert len(T.hide_exercises(events, cfg.exercises)) == len(events)
 
     def test_hides_only_the_listed_course(self, events, cfg):
         c = shift(cfg, exercises={"hide_for": ["186.814"]})
-        kept = T.hide_exercises(events, c)
+        kept = T.hide_exercises(events, c.exercises)
         assert not [e for e in kept
                     if e.course_nr == "186.814" and "Exercises" in e.description]
         assert [e for e in kept if e.course_nr == "194.187"]
@@ -78,24 +84,24 @@ class TestHideExercises:
     def test_qa_sessions_are_not_exercises(self, events, cfg):
         """Q&A is not an exercise and must keep the ordinary lecture treatment."""
         c = shift(cfg, exercises={"hide_for": ["186.814"]})
-        kept = {e.description for e in T.hide_exercises(events, c)}
+        kept = {e.description for e in T.hide_exercises(events, c.exercises)}
         assert "Algorithmics Q&A" in kept
         assert "Q & A 2" in kept
 
     def test_lectures_of_a_hidden_course_stay(self, events, cfg):
         c = shift(cfg, exercises={"hide_for": ["186.814"]})
-        kept = T.hide_exercises(events, c)
+        kept = T.hide_exercises(events, c.exercises)
         assert [e for e in kept if e.course_nr == "186.814" and e.description == "Lecture"]
 
     def test_warns_when_hiding_a_short_slot(self, cfg, capsys):
         """After registering, your own 1 h slot matches too - it must not vanish quietly."""
         c = shift(cfg, exercises={"hide_for": ["186.814"]})
-        T.hide_exercises([make_event(description="Exercise Group 7", hours=1)], c)
+        T.hide_exercises([make_event(description="Exercise Group 7", hours=1)], c.exercises)
         assert "WARNING" in capsys.readouterr().err
 
     def test_silent_for_a_plenary_block(self, cfg, capsys):
         c = shift(cfg, exercises={"hide_for": ["186.814"]})
-        T.hide_exercises([make_event(description="Algorithmics Exercises 1-3", hours=2)], c)
+        T.hide_exercises([make_event(description="Algorithmics Exercises 1-3", hours=2)], c.exercises)
         assert "WARNING" not in capsys.readouterr().err
 
 
@@ -134,39 +140,40 @@ class TestPrunePast:
 
     def test_disabled_by_default(self, cfg):
         past = [self._past(description="Lecture")]
-        assert len(T.prune_past(past, cfg)) == 1
+        assert len(T.prune_past(past, cfg.retention)) == 1
 
     def test_past_lecture_is_dropped(self, cfg):
-        assert T.prune_past([self._past(description="Lecture")], self._cfg(cfg)) == []
+        assert T.prune_past([self._past(description="Lecture")], self._cfg(cfg).retention) == []
 
     def test_past_exam_is_kept(self, cfg):
-        kept = T.prune_past([self._past(description="written", kind="exam")], self._cfg(cfg))
+        kept = T.prune_past([self._past(description="written", kind="exam")],
+                            self._cfg(cfg).retention)
         assert len(kept) == 1
 
     def test_past_exercise_is_kept(self, cfg):
         kept = T.prune_past([self._past(description="Algorithmics Exercises 4")],
-                            self._cfg(cfg))
+                            self._cfg(cfg).retention)
         assert len(kept) == 1
 
     def test_both_spellings_of_qa_are_kept(self, cfg):
         """TISS writes it as "Algorithmics Q&A" and as "Q & A 2"."""
         for desc in ("Algorithmics Q&A", "Q & A 2"):
-            assert len(T.prune_past([self._past(description=desc)], self._cfg(cfg))) == 1
+            assert len(T.prune_past([self._past(description=desc)], self._cfg(cfg).retention)) == 1
 
     def test_past_registration_reminder_is_dropped(self, cfg):
         ev = self._past(description="opens", kind="registration", scope="exam")
-        assert T.prune_past([ev], self._cfg(cfg)) == []
+        assert T.prune_past([ev], self._cfg(cfg).retention) == []
 
     def test_future_events_are_untouched(self, cfg):
         future = make_event(start=datetime.now(T.VIENNA) + timedelta(days=7))
-        assert len(T.prune_past([future], self._cfg(cfg))) == 1
+        assert len(T.prune_past([future], self._cfg(cfg).retention)) == 1
 
     def test_an_event_still_running_is_kept(self, cfg):
         now = datetime.now(T.VIENNA)
         ongoing = make_event(start=now - timedelta(hours=1), hours=3)
-        assert len(T.prune_past([ongoing], self._cfg(cfg))) == 1
+        assert len(T.prune_past([ongoing], self._cfg(cfg).retention)) == 1
 
     def test_all_day_event_survives_its_own_day(self, cfg):
         today = make_event(start=datetime.now(T.VIENNA), all_day=True,
                            summary="National Day, no lectures", description="")
-        assert len(T.prune_past([today], self._cfg(cfg))) == 1
+        assert len(T.prune_past([today], self._cfg(cfg).retention)) == 1

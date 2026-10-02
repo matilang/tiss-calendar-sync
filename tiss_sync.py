@@ -15,12 +15,12 @@ re-exported below are what cleanup_imported.py, check_cloud_run.py and the tests
 See tisscal/__init__.py for what lives in which module.
 """
 from tisscal.cli import cmd_export, cmd_list, cmd_preview, main
-from tisscal.config import load_config
+from tisscal.config import (ConfigError, Exercises, Reminders, Retention, Scrape,
+                            Semester, Settings, load_config)
 from tisscal.events import scraped_events
 from tisscal.feed import fetch_feed, parse_feed
 from tisscal.gcal import (RETRY_STATUS, THROTTLE_REASONS, _execute, _gcal_body, cmd_sync)
-from tisscal.model import (COURSE_NR, SOURCE_TAG, TYPE_CODES, UID_TIMESTAMP, VIENNA,
-                           Lecture)
+from tisscal.model import COURSE_NR, TYPE_CODES, UID_TIMESTAMP, VIENNA, Lecture
 from tisscal.classify import is_exam, is_exercise
 from tisscal.filters import (drop_placeholders, filter_events, hide_exercises,
                              matches_course, prune_past)
@@ -29,7 +29,8 @@ from tisscal.pipeline import build_events
 from tisscal.titles import course_label, display_title
 
 __all__ = [
-    "COURSE_NR", "Lecture", "build_events", "RETRY_STATUS", "SOURCE_TAG", "THROTTLE_REASONS",
+    "COURSE_NR", "ConfigError", "Exercises", "Lecture", "RETRY_STATUS", "Reminders",
+    "Retention", "Scrape", "Semester", "Settings", "THROTTLE_REASONS", "build_events",
     "TYPE_CODES", "UID_TIMESTAMP", "VIENNA", "_execute", "_gcal_body", "cmd_export",
     "cmd_list", "cmd_preview", "cmd_sync", "course_label", "display_title",
     "drop_placeholders", "fetch_feed", "filter_events", "hide_exercises", "is_exam",

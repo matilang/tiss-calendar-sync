@@ -2,16 +2,17 @@
 from __future__ import annotations
 
 import sys
-from datetime import date, datetime, time, timedelta
+from datetime import datetime, time, timedelta
 
 from .classify import is_exercise
+from .config import Exercises, Retention, Semester
 from .model import VIENNA, Lecture
 
 
 # --------------------------------------------------------------------------- #
 # Filtering
 # --------------------------------------------------------------------------- #
-def matches_course(ev: Lecture, wanted: list[str]) -> bool:
+def matches_course(ev: Lecture, wanted: tuple[str, ...]) -> bool:
     """A course entry can be a course number ('185.A91') or a piece of the title."""
     if not wanted:
         return True
@@ -25,13 +26,13 @@ def matches_course(ev: Lecture, wanted: list[str]) -> bool:
     return False
 
 
-def filter_events(events: list[Lecture], cfg: dict) -> list[Lecture]:
-    sem = cfg.get("semester", {})
-    start = date.fromisoformat(sem["start"]) if "start" in sem else date.today()
-    end = date.fromisoformat(sem["end"]) if "end" in sem else date.today() + timedelta(days=200)
-    lo = datetime.combine(start, time.min, VIENNA)
-    hi = datetime.combine(end, time.max, VIENNA)
-    excl = [k.lower() for k in cfg["exclude_keywords"]]
+def filter_events(events: list[Lecture], semester: Semester,
+                  courses: tuple[str, ...], exclude_keywords: tuple[str, ...],
+                  ) -> list[Lecture]:
+    """Keep what is inside the semester window, wanted, and not excluded."""
+    lo = datetime.combine(semester.start, time.min, VIENNA)
+    hi = datetime.combine(semester.end, time.max, VIENNA)
+    excl = [k.lower() for k in exclude_keywords]
 
     kept = []
     for ev in events:
@@ -40,7 +41,7 @@ def filter_events(events: list[Lecture], cfg: dict) -> list[Lecture]:
         # categories included so a stale semester tag ("-2025W") can be excluded
         if any(k in f"{ev.summary} {ev.categories}".lower() for k in excl):
             continue
-        if not matches_course(ev, cfg["courses"]):
+        if not matches_course(ev, courses):
             continue
         kept.append(ev)
     return kept
@@ -72,7 +73,7 @@ def drop_placeholders(events: list[Lecture], min_hours: float) -> list[Lecture]:
     return kept
 
 
-def hide_exercises(events: list[Lecture], cfg: dict) -> list[Lecture]:
+def hide_exercises(events: list[Lecture], exercises: Exercises) -> list[Lecture]:
     """Drop exercise slots for courses where you have not picked a group yet.
 
     Listed per course on purpose. TISS mixes two different things under "exercise":
@@ -83,14 +84,13 @@ def hide_exercises(events: list[Lecture], cfg: dict) -> list[Lecture]:
 
     Remove the course number from `hide_for` once you are in a group.
     """
-    spec = cfg.get("exercises", {})
-    hidden = {str(c) for c in spec.get("hide_for", [])}
+    hidden = {str(c) for c in exercises.hide_for}
     if not hidden:
         return events
 
     kept, dropped = [], []
     for ev in events:
-        if ev.course_nr in hidden and ev.kind == "lecture" and is_exercise(ev, cfg):
+        if ev.course_nr in hidden and ev.kind == "lecture" and is_exercise(ev, exercises):
             dropped.append(ev)
         else:
             kept.append(ev)
@@ -110,7 +110,7 @@ def hide_exercises(events: list[Lecture], cfg: dict) -> list[Lecture]:
     return kept
 
 
-def prune_past(events: list[Lecture], cfg: dict) -> list[Lecture]:
+def prune_past(events: list[Lecture], retention: Retention) -> list[Lecture]:
     """Drop events that are over, except the ones worth keeping as a record.
 
     With a daily sync the calendar fills up with lectures you already sat through and
@@ -120,12 +120,11 @@ def prune_past(events: list[Lecture], cfg: dict) -> list[Lecture]:
     Dropping an event here removes it from `wanted`, so the normal cleanup pass deletes
     it from the calendar - no separate deletion path.
     """
-    ret = cfg.get("retention", {})
-    if not ret.get("prune_past", False):
+    if not retention.prune_past:
         return events
 
-    keep_kinds = set(ret.get("keep_past_kinds", ["exam"]))
-    keep_words = [w.lower() for w in ret.get("keep_past_keywords", [])]
+    keep_kinds = set(retention.keep_past_kinds)
+    keep_words = [w.lower() for w in retention.keep_past_keywords]
     now = datetime.now(VIENNA)
 
     kept = []

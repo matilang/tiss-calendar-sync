@@ -14,7 +14,6 @@ VIENNA = ZoneInfo("Europe/Vienna")
 COURSE_NR = re.compile(r"\b(\d{3}\.[0-9A-Z]{3})\b")  # e.g. 185.A91, 104.265
 
 
-SOURCE_TAG = "tiss_sync"
 
 
 # TISS stamps each UID with the time the feed was generated, e.g.

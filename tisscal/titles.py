@@ -1,16 +1,19 @@
 """What an event is called on the calendar."""
 from __future__ import annotations
 
+from typing import Mapping
+
 from .classify import is_exercise
+from .config import Exercises
 from .model import TYPE_CODES, Lecture
 
 
-def course_label(course_nr: str | None, cfg: dict) -> str:
+def course_label(course_nr: str | None, titles: Mapping[str, str]) -> str:
     """Short name configured for a course in [titles], or "" if none is set."""
-    return cfg.get("titles", {}).get(course_nr or "", "")
+    return titles.get(course_nr or "", "")
 
 
-def display_title(ev: Lecture, cfg: dict) -> str:
+def display_title(ev: Lecture, titles: Mapping[str, str], exercises: Exercises) -> str:
     """What the event is called on the calendar.
 
     Two different shapes come in. TISS titles already name the course and lead with its
@@ -20,7 +23,7 @@ def display_title(ev: Lecture, cfg: dict) -> str:
     due ("Project Report ist fällig") and never mention the course, so the short name
     goes in front; without it the deadline would be unattributable.
     """
-    label = course_label(ev.course_nr, cfg)
+    label = course_label(ev.course_nr, titles)
     title = ev.summary
 
     if ev.course_nr and ev.course_nr in title:
@@ -32,10 +35,10 @@ def display_title(ev: Lecture, cfg: dict) -> str:
     elif ev.course_nr:
         title = f"{label or ev.course_nr} {title}".strip()
 
-    return _exercise_code(title, ev, cfg)
+    return _exercise_code(title, ev, exercises)
 
 
-def _exercise_code(title: str, ev: Lecture, cfg: dict) -> str:
+def _exercise_code(title: str, ev: Lecture, exercises: Exercises) -> str:
     """Swap the leading course-type code on exercise slots: "VU Algorithmics" -> "UE ...".
 
     The course type is VU (lecture plus exercise), but an individual exercise slot is an
@@ -43,10 +46,9 @@ def _exercise_code(title: str, ev: Lecture, cfg: dict) -> str:
     Only applies to feed events - an exam or a registration reminder keeps the course's
     own code.
     """
-    code = cfg.get("exercises", {}).get("type_code", "UE")
-    if not code or ev.kind != "lecture" or not is_exercise(ev, cfg):
+    if not exercises.type_code or ev.kind != "lecture" or not is_exercise(ev, exercises):
         return title
     head, _, rest = title.partition(" ")
     if head in TYPE_CODES and rest:
-        return f"{code} {rest}"
+        return f"{exercises.type_code} {rest}"
     return title

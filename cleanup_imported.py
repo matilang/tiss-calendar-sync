@@ -38,9 +38,9 @@ def main() -> None:
     args = ap.parse_args()
 
     base = Path(__file__).resolve().parent
-    cfg = load_config(base / args.config)
+    settings = load_config(base / args.config)
     svc = get_service(base)
-    cal_id = cfg["google"]["calendar_id"]
+    cal_id = settings.calendar_id
 
     items: list[dict] = []
     page = None

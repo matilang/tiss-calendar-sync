@@ -25,26 +25,28 @@ order matters is worth nothing on its own.
 """
 from __future__ import annotations
 
+from .config import Settings
 from .events import scraped_events
 from .filters import drop_placeholders, filter_events, hide_exercises, prune_past
 from .merge import merge_parallel
 from .model import Lecture
 
 
-def build_events(raw: list[Lecture], cfg: dict, scraper=None) -> list[Lecture]:
+def build_events(raw: list[Lecture], settings: Settings, scraper=None) -> list[Lecture]:
     """Everything the calendar should contain, from the raw feed and the course pages.
 
     `scraper` is injectable so this can be exercised without touching the network.
     """
-    events = filter_events(raw, cfg)
-    events = drop_placeholders(events, cfg["placeholder_min_hours"])
-    events = hide_exercises(events, cfg)
+    events = filter_events(raw, settings.semester, settings.courses,
+                           settings.exclude_keywords)
+    events = drop_placeholders(events, settings.placeholder_min_hours)
+    events = hide_exercises(events, settings.exercises)
 
-    if cfg["scrape"].get("courses"):
-        events += scraped_events(cfg, scraper=scraper)
+    if settings.scrape.courses:
+        events += scraped_events(settings.scrape, settings.titles, scraper=scraper)
 
-    if cfg["merge_parallel_rooms"]:
+    if settings.merge_parallel_rooms:
         events = merge_parallel(events)
 
-    events = prune_past(events, cfg)
+    events = prune_past(events, settings.retention)
     return sorted({e.gcal_id: e for e in events}.values(), key=lambda e: e.start_dt)

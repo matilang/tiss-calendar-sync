@@ -56,9 +56,9 @@ def main() -> None:
     args = ap.parse_args()
 
     base_dir = Path(__file__).resolve().parent
-    cfg = load_config(base_dir / args.config)
+    settings = load_config(base_dir / args.config)
     svc = get_service(base_dir)
-    cal_id = cfg["google"]["calendar_id"]
+    cal_id = settings.calendar_id
     state_path = base_dir / STATE
 
     items = snapshot(svc, cal_id)

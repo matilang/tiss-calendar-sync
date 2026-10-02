@@ -24,14 +24,16 @@ PIPELINE = ROOT / "tisscal" / "pipeline.py"
 PYTHON = Path(sys.executable)
 
 STEPS = {
-    "filter": '    events = filter_events(raw, cfg)\n',
-    "placeholders": '    events = drop_placeholders(events, cfg["placeholder_min_hours"])\n',
-    "exercises": '    events = hide_exercises(events, cfg)\n',
-    "scrape": ('    if cfg["scrape"].get("courses"):\n'
-               '        events += scraped_events(cfg, scraper=scraper)\n'),
-    "merge": ('    if cfg["merge_parallel_rooms"]:\n'
-              '        events = merge_parallel(events)\n'),
-    "prune": '    events = prune_past(events, cfg)\n',
+    "filter": ("    events = filter_events(raw, settings.semester, settings.courses,\n"
+               "                           settings.exclude_keywords)\n"),
+    "placeholders": "    events = drop_placeholders(events, settings.placeholder_min_hours)\n",
+    "exercises": "    events = hide_exercises(events, settings.exercises)\n",
+    "scrape": ("    if settings.scrape.courses:\n"
+               "        events += scraped_events(settings.scrape, settings.titles,"
+               " scraper=scraper)\n"),
+    "merge": ("    if settings.merge_parallel_rooms:\n"
+              "        events = merge_parallel(events)\n"),
+    "prune": "    events = prune_past(events, settings.retention)\n",
 }
 
 ORDER = ["filter", "placeholders", "exercises", "scrape", "merge", "prune"]

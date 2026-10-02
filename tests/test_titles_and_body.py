@@ -10,57 +10,57 @@ from conftest import make_event, shift
 class TestTitles:
     def test_course_number_is_dropped(self, cfg):
         ev = make_event(summary="186.814 VU Algorithmics")
-        assert T.display_title(ev, cfg) == "VU Algorithmics"
+        assert T.display_title(ev, cfg.titles, cfg.exercises) == "VU Algorithmics"
 
     def test_long_name_is_shortened_by_the_label(self, cfg):
         ev = make_event(course_nr="194.187",
                         summary="194.187 VU Advanced Software Engineering")
-        assert T.display_title(ev, cfg) == "VU ASE"
+        assert T.display_title(ev, cfg.titles, cfg.exercises) == "VU ASE"
 
     def test_course_without_a_label_just_loses_the_number(self, cfg):
         ev = make_event(course_nr="192.039", summary="192.039 VU Deep Learning")
-        assert T.display_title(ev, cfg) == "VU Deep Learning"
+        assert T.display_title(ev, cfg.titles, cfg.exercises) == "VU Deep Learning"
 
     def test_event_with_no_course_is_left_alone(self, cfg):
         ev = make_event(course_nr=None, summary="National Day, no lectures")
-        assert T.display_title(ev, cfg) == "National Day, no lectures"
+        assert T.display_title(ev, cfg.titles, cfg.exercises) == "National Day, no lectures"
 
     def test_tuwel_deadline_gets_the_label_in_front(self, cfg):
         """TUWEL titles never name their course, so it has to be prefixed."""
         ev = make_event(course_nr="192.161", summary="Project Report ist fällig.",
                         description="")
-        assert T.display_title(ev, cfg) == "VU MoGD Project Report ist fällig."
+        assert T.display_title(ev, cfg.titles, cfg.exercises) == "VU MoGD Project Report ist fällig."
 
     def test_label_is_not_repeated_on_a_synthetic_event(self, cfg):
         """Exam and registration summaries are built with the label already inside."""
         ev = make_event(course_nr="194.187", summary="EXAM VU ASE Test 1",
                         description="written", kind="exam")
-        assert T.display_title(ev, cfg) == "EXAM VU ASE Test 1"
+        assert T.display_title(ev, cfg.titles, cfg.exercises) == "EXAM VU ASE Test 1"
 
     def test_exercise_slot_is_relabelled_ue(self, cfg):
         """An exercise of a VU is still an Übung."""
         ev = make_event(summary="186.814 VU Algorithmics",
                         description="Algorithmics Exercises 4")
-        assert T.display_title(ev, cfg) == "UE Algorithmics"
+        assert T.display_title(ev, cfg.titles, cfg.exercises) == "UE Algorithmics"
 
     def test_lecture_keeps_vu(self, cfg):
         ev = make_event(summary="186.814 VU Algorithmics", description="Lecture")
-        assert T.display_title(ev, cfg) == "VU Algorithmics"
+        assert T.display_title(ev, cfg.titles, cfg.exercises) == "VU Algorithmics"
 
     def test_qa_keeps_vu(self, cfg):
         ev = make_event(summary="186.814 VU Algorithmics", description="Algorithmics Q&A")
-        assert T.display_title(ev, cfg) == "VU Algorithmics"
+        assert T.display_title(ev, cfg.titles, cfg.exercises) == "VU Algorithmics"
 
     def test_exam_keeps_the_course_code(self, cfg):
         """Only feed events are relabelled; an exam is not an Übung."""
         ev = make_event(summary="EXAM VU Algorithmics Prüfung", description="written",
                         kind="exam")
-        assert T.display_title(ev, cfg).startswith("EXAM VU")
+        assert T.display_title(ev, cfg.titles, cfg.exercises).startswith("EXAM VU")
 
     def test_relabelling_can_be_switched_off(self, cfg):
         c = shift(cfg, exercises={"type_code": ""})
         ev = make_event(summary="186.814 VU Algorithmics", description="Exercises 4")
-        assert T.display_title(ev, c) == "VU Algorithmics"
+        assert T.display_title(ev, c.titles, c.exercises) == "VU Algorithmics"
 
 
 class TestGcalBody:

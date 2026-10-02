@@ -9,32 +9,30 @@ from time import sleep
 
 from .model import VIENNA, Lecture
 from .classify import is_exam
+from .config import Settings
 from .titles import display_title
 
 
-def _gcal_body(ev: Lecture, cfg: dict) -> dict:
+def _gcal_body(ev: Lecture, settings: Settings) -> dict:
     def ts(v):
         if isinstance(v, datetime):
             return {"dateTime": v.isoformat(), "timeZone": "Europe/Vienna"}
         return {"date": v.isoformat()}
 
-    rem = cfg["reminders"]
+    rem = settings.reminders
     if ev.kind == "registration":
-        # Exam sign-up is worth a warning days ahead. An exercise group is
-        # first-come-first-served and opens at a published hour, so a day-early nudge is
-        # useless there - the only moment that matters is the moment it opens.
-        default = [24 * 60, 0]
-        minutes = rem.get(f"{ev.scope}_registration_minutes_before",
-                          rem.get("registration_minutes_before", default))
-        color = rem.get("registration_color_id", "5")   # 5 = banana
-    elif ev.kind == "exam" or is_exam(ev, cfg):
-        minutes = rem.get("exam_minutes_before", [3 * 24 * 60, 24 * 60])
-        color = rem.get("exam_color_id", "11")          # 11 = red
+        # Reminders.for_scope picks the per-scope override when there is one: exam
+        # sign-up wants a warning days ahead, an exercise group only the moment it opens.
+        minutes = rem.for_scope(ev.scope)
+        color = rem.registration_color_id
+    elif ev.kind == "exam" or is_exam(ev, rem):
+        minutes = rem.exam_minutes_before
+        color = rem.exam_color_id
     else:
-        minutes = rem.get("lecture_minutes_before", [15])
+        minutes = rem.lecture_minutes_before
         color = None
 
-    title = display_title(ev, cfg)
+    title = display_title(ev, settings.titles, settings.exercises)
 
     body = {
         "summary": title,
@@ -44,7 +42,7 @@ def _gcal_body(ev: Lecture, cfg: dict) -> dict:
         "end": ts(ev.end),
         "reminders": {"useDefault": False,
                       "overrides": [{"method": "popup", "minutes": m} for m in minutes]},
-        "extendedProperties": {"private": {"source": cfg["_tag"]}},
+        "extendedProperties": {"private": {"source": settings.tag}},
         "status": "confirmed",
     }
     if color:
@@ -83,17 +81,17 @@ def _execute(request, tries: int = 6):
             sleep(delay)
 
 
-def cmd_sync(events: list[Lecture], cfg: dict, base: Path) -> None:
+def cmd_sync(events: list[Lecture], settings: Settings, base: Path) -> None:
     from googleapiclient.errors import HttpError
     from gcal_auth import get_service
 
     svc = get_service(base)
-    cal_id = cfg["google"]["calendar_id"]
+    cal_id = settings.calendar_id
     wanted = {ev.gcal_id: ev for ev in events}
 
     created = updated = revived = deleted = 0
     for gid, ev in wanted.items():
-        body = _gcal_body(ev, cfg) | {"id": gid}
+        body = _gcal_body(ev, settings) | {"id": gid}
         try:
             _execute(svc.events().insert(calendarId=cal_id, body=body))
             created += 1
@@ -114,14 +112,12 @@ def cmd_sync(events: list[Lecture], cfg: dict, base: Path) -> None:
 
     # Remove events this script created earlier that are no longer in the filtered feed
     # (e.g. you removed a course from config, or TISS cancelled a lecture).
-    sem = cfg.get("semester", {})
-    t_min = datetime.combine(date.fromisoformat(sem["start"]) if "start" in sem else date.today(),
-                             time.min, VIENNA).isoformat()
+    t_min = datetime.combine(settings.semester.start, time.min, VIENNA).isoformat()
     page = None
     while True:
         resp = _execute(svc.events().list(
             calendarId=cal_id, timeMin=t_min, pageToken=page,
-            privateExtendedProperty=f"source={cfg['_tag']}",
+            privateExtendedProperty=f"source={settings.tag}",
             singleEvents=True, maxResults=2500))
         for item in resp.get("items", []):
             if item["id"] not in wanted:
