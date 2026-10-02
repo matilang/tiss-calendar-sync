@@ -11,10 +11,11 @@ from icalendar import Calendar, Event
 from .config import load_config
 from .events import scraped_events
 from .feed import fetch_feed, parse_feed
+from .classify import is_exam
 from .gcal import cmd_sync
 from .model import SOURCE_TAG, Lecture
-from .pipeline import (display_title, drop_placeholders, filter_events, hide_exercises,
-                       is_exam, merge_parallel, prune_past)
+from .pipeline import build_events
+from .titles import display_title
 
 
 # --------------------------------------------------------------------------- #
@@ -86,27 +87,7 @@ def main() -> None:
         cmd_list(events)  # unfiltered on purpose, so you see everything
         return
 
-    events = filter_events(events, cfg)
-    events = drop_placeholders(events, cfg["placeholder_min_hours"])
-    # Before the scraped events are added, so this can never remove a registration
-    # reminder - that reminder is the one thing you do want while waiting for a group.
-    events = hide_exercises(events, cfg)
-
-    # Exams and registration deadlines are deliberately added after the semester filter:
-    # a retake exam or a late registration window often falls outside the lecture window
-    # but is exactly what you need reminding about.
-    if cfg["scrape"].get("courses"):
-        events += scraped_events(cfg)
-
-    # After the scraped events, so an exam held in five rooms at once becomes one event.
-    if cfg["merge_parallel_rooms"]:
-        events = merge_parallel(events)
-
-    events = prune_past(events, cfg)
-
-    # Several scraped rows can describe the same thing (one window per sitting); they
-    # share an id, so collapse them here rather than letting the counts lie.
-    events = sorted({e.gcal_id: e for e in events}.values(), key=lambda e: e.start_dt)
+    events = build_events(events, cfg)
 
     if args.command == "preview":
         cmd_preview(events, cfg)

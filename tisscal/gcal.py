@@ -8,7 +8,8 @@ from pathlib import Path
 from time import sleep
 
 from .model import VIENNA, Lecture
-from .pipeline import display_title, is_exam
+from .classify import is_exam
+from .titles import display_title
 
 
 def _gcal_body(ev: Lecture, cfg: dict) -> dict:

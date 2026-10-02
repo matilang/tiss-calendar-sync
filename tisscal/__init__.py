@@ -5,14 +5,19 @@ Where things live:
     model.py     the Lecture event type and the constants that define identity
     config.py    reading config.toml and defaulting every option
     feed.py      fetching and parsing an iCal feed
-    pipeline.py  the rules: filtering, placeholders, exercises, merging, titles, pruning
+    classify.py  is this an exercise? an exam?
+    filters.py   which events belong on the calendar at all
+    merge.py     folding one slot held in several rooms into a single event
+    titles.py    what an event is called
     scrape.py    reading exam dates and registration windows off a TISS course page
     events.py    turning scraped course data into calendar events
+    pipeline.py  the order all of the above applies in - start here
     gcal.py      the Google Calendar side: event bodies, retries, the sync itself
     cli.py       list / preview / export / sync
 
-The rules in pipeline.py are pure functions - events in, events out - which is why they
-are the part covered by tests. Nothing there touches the network or Google.
+filters, merge, titles and classify are pure functions - events in, events out - which is
+why they are the part covered by tests. Nothing there touches the network or Google.
+Read pipeline.py first: it is the order, and most steps are only correct where they sit.
 """
 from .config import load_config
 from .feed import fetch_feed, parse_feed

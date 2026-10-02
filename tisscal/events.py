@@ -9,7 +9,7 @@ from collections import defaultdict
 from datetime import datetime, timedelta
 
 from .model import VIENNA, Lecture
-from .pipeline import course_label
+from .titles import course_label
 
 
 # --------------------------------------------------------------------------- #
