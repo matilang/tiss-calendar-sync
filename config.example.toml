@@ -1,0 +1,34 @@
+# Copy to config.toml and fill in. Do NOT commit config.toml (the iCal URL contains a private token).
+
+# Courses to keep: course numbers (best) or a unique part of the title.
+# Run `python tiss_sync.py list` to see what is in your feed.
+# Leave empty ([]) to keep everything inside the semester window.
+courses = [
+  "185.A91",
+  "104.265",
+  # "Algorithmen und Datenstrukturen",
+]
+
+# Events whose title contains any of these are dropped (case-insensitive)
+exclude_keywords = ["Sprechstunde"]
+
+[tiss]
+# TISS -> your calendar -> iCal export / subscribe link (or a path to a downloaded .ics file)
+ical_url = "https://tiss.tuwien.ac.at/PASTE_YOUR_ICAL_LINK"
+
+[semester]
+# Only events inside this window are synced. This alone removes last year's courses.
+start = "2026-10-01"
+end   = "2027-02-28"
+
+[google]
+# Strongly recommended: create a separate calendar "TU Wien" and use its ID
+# (Google Calendar -> Settings -> that calendar -> "Calendar ID").
+calendar_id = "xxxxxxxx@group.calendar.google.com"
+
+[reminders]
+lecture_minutes_before = [15]
+# Exams / tests / submissions: 3 days and 1 day before
+exam_minutes_before = [4320, 1440]
+exam_keywords = ["Prüfung", "Exam", "Test", "Klausur", "Abgabe", "Deadline"]
+exam_color_id = "11"   # red

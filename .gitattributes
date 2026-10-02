@@ -1,0 +1,9 @@
+# Keep line endings LF in the repository regardless of the Windows checkout setting.
+#
+# This matters for correctness, not tidiness: the workflow's `run:` block contains a
+# bash heredoc, and with CRLF the terminator arrives as "PY\r", never matches "PY",
+# and the step fails on the Linux runner.
+* text=auto eol=lf
+
+# Windows batch stays CRLF - that is what cmd.exe expects.
+*.cmd text eol=crlf

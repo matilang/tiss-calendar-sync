@@ -1,0 +1,23 @@
+# --- secrets: never commit these -------------------------------------------
+# The TISS iCal URL embeds a private token, TUWEL's embeds an authtoken, and the
+# service account key is a full credential for the calendar.
+config.toml
+tuwel.toml
+service_account.json
+credentials.json
+token.json
+*.bak
+
+# --- local state -----------------------------------------------------------
+.venv/
+__pycache__/
+*.pyc
+sync.log
+
+# Exported calendars and the pre-cleanup backup: your personal timetable, and
+# large. No reason to have them in git.
+*.ics
+deleted_untagged_backup.json
+
+# --- scratch ---------------------------------------------------------------
+wftest/

@@ -1,0 +1,85 @@
+name: TISS calendar sync
+
+# Runs the sync without your laptop being on. Needs three repository secrets:
+#
+#   SERVICE_ACCOUNT_JSON  - the whole contents of service_account.json
+#   CONFIG_TOML           - the whole contents of config.toml  (holds the TISS feed token)
+#   TUWEL_TOML            - the whole contents of tuwel.toml   (optional; holds the TUWEL
+#                           authtoken). Leave it unset and the TUWEL step is skipped.
+#
+# Settings -> Secrets and variables -> Actions -> New repository secret.
+# The repository must be private: the secrets are encrypted, but the config files they
+# recreate contain feed tokens.
+
+on:
+  schedule:
+    # 05:00 UTC. GitHub cron has no daylight saving, so this lands at 07:00 Vienna time
+    # in summer and 06:00 in winter. Runs are also commonly 5-30 min late at peak hours,
+    # which does not matter for a once-a-day job.
+    - cron: "0 5 * * *"
+  # Lets you trigger it by hand from the Actions tab - use this for the first test.
+  workflow_dispatch:
+
+concurrency:
+  # Never let two syncs overlap; they would fight over the same events.
+  group: tiss-calendar-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          # 3.11+ required: the script reads its config with tomllib.
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install --disable-pip-version-check -r requirements.txt
+
+      - name: Restore config and credentials from secrets
+        env:
+          SERVICE_ACCOUNT_JSON: ${{ secrets.SERVICE_ACCOUNT_JSON }}
+          CONFIG_TOML: ${{ secrets.CONFIG_TOML }}
+          TUWEL_TOML: ${{ secrets.TUWEL_TOML }}
+        run: |
+          set -euo pipefail
+          if [ -z "$SERVICE_ACCOUNT_JSON" ] || [ -z "$CONFIG_TOML" ]; then
+            echo "::error::SERVICE_ACCOUNT_JSON and CONFIG_TOML secrets are required."
+            exit 1
+          fi
+          # printf '%s', not echo: keeps the JSON byte-exact and adds no stray newline.
+          printf '%s' "$SERVICE_ACCOUNT_JSON" > service_account.json
+          printf '%s' "$CONFIG_TOML" > config.toml
+          if [ -n "$TUWEL_TOML" ]; then
+            printf '%s' "$TUWEL_TOML" > tuwel.toml
+            echo "tuwel=yes" >> "$GITHUB_OUTPUT"
+          fi
+          # Fail early and clearly if a secret was pasted truncated or mangled.
+          python - <<'PY'
+          import json, tomllib, pathlib
+          json.loads(pathlib.Path("service_account.json").read_text(encoding="utf-8"))
+          tomllib.loads(pathlib.Path("config.toml").read_text(encoding="utf-8"))
+          p = pathlib.Path("tuwel.toml")
+          if p.exists():
+              tomllib.loads(p.read_text(encoding="utf-8"))
+          print("secrets parsed cleanly")
+          PY
+        id: creds
+
+      - name: Sync TISS lectures, exams and registration reminders
+        run: python tiss_sync.py sync
+
+      - name: Sync TUWEL deadlines
+        if: steps.creds.outputs.tuwel == 'yes'
+        run: python tiss_sync.py sync -c tuwel.toml
+
+      - name: Shred credentials
+        # always(): they must not survive a failed run either.
+        if: always()
+        run: rm -f service_account.json config.toml tuwel.toml
