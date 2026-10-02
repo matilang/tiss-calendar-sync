@@ -82,14 +82,14 @@ import — but then there are no automatic updates.
 
 ```bash
 python tiss_sync.py list|preview|export|sync [-c settings.toml]
-python tiss_scrape.py 186814 194187        # exam dates, registration windows, group hours
-python tiss_scrape.py 186814 --json
+python -m tisscal.scrape 186814 194187     # exam dates, registration windows, group hours
+python -m tisscal.scrape 186814 --json
 python tools/cleanup_imported.py [--apply] # remove events imported into the calendar by hand
 python check_cloud_run.py --canary         # prove a GitHub Actions run reached the calendar
 python -m pytest                           # 79 tests, no network (pip install -r requirements-dev.txt)
 ```
 
-`tiss_sync.py` and `tiss_scrape.py` are thin entry points; the code lives in `tisscal/`
+`tiss_sync.py` is a thin entry point; the code lives in `tisscal/`
 and the same commands work as `python -m tisscal.cli` and `python -m tisscal.scrape`.
 
 ## Where the code is
@@ -110,7 +110,7 @@ If you want to change *what shows up on the calendar*, it is almost always
 `tisscal/pipeline.py` - those are pure functions, events in and events out, and they are
 what the tests cover.
 
-`tiss_scrape.py` is worth running on its own before registering: it lists each exercise
+The scraper is worth running on its own before registering: it lists each exercise
 group with its exact hours, so you can pick a group on the timetable rather than guessing.
 
 ## Behaviour worth knowing
@@ -174,7 +174,7 @@ for 60 days.
 
 - Course numbers are detected with the pattern `123.ABC`. If TISS titles look different in
   your feed, use part of the course title in `courses` instead.
-- TISS course pages are rendered client-side. `tiss_scrape.py` replays the DeltaSpike
+- TISS course pages are rendered client-side. `tisscal/scrape.py` replays the DeltaSpike
   window handshake (a `dsrwid-<token>` cookie plus `?dsrid=<token>`) to get the real HTML,
   so no headless browser is needed. The lecture-dates table is paginated at 20 rows and
   the remaining pages cannot be fetched, so the scraper reports

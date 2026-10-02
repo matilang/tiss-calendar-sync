@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 
 import pytest
 
-import tiss_scrape as ts
+from tisscal import scrape as ts
 import tiss_sync as T
 from conftest import shift
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-tiss_scrape.py - read a TISS course page for the things the iCal feed does not carry:
+tisscal/scrape.py - read a TISS course page for what the iCal feed does not carry:
 exam dates, exam registration windows, course/group registration deadlines, and the
 dates of courses you are not registered for yet.
 
