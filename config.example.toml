@@ -30,6 +30,23 @@ placeholder_min_hours = 4
 # rooms. Also folds an exam held in several parallel rooms into a single event.
 merge_parallel_rooms = true
 
+[exercises]
+# Courses where you have not picked an exercise group yet: their exercise slots are
+# hidden, leaving only the reminder to go and register.
+#
+# Listed per course on purpose, because TISS mixes two things under 'exercise'. For
+# 186.814 the feed carries 'Algorithmics Exercises 1-3' as a 2 h session in a lecture
+# hall, while the real group slots are 1 h in a seminar room and only appear once you
+# register - so which of them you want to see beforehand is a judgement call.
+# Remove the number once you are in a group. If something shorter than 90 min gets
+# hidden, the sync warns you: that is probably your own slot.
+hide_for = []
+# What counts as an exercise. Q&A sessions deliberately do not match.
+keywords = ["Exercise", "Übung", "Uebung"]
+# An exercise slot of a VU is still an Übung, so the leading type code is swapped:
+# "VU Algorithmics" -> "UE Algorithmics". Set to "" to leave titles alone.
+type_code = "UE"
+
 [titles]
 # Calendar titles, keyed by course number. The number itself is dropped from the title,
 # and a long name can be shortened here. A course with no entry keeps its TISS name
@@ -86,4 +103,8 @@ exam_keywords = ["Prüfung", "Exam", "Test", "Klausur", "Abgabe", "Deadline"]
 exam_color_id = "11"   # red
 # Registration: a day ahead so you can plan, and again the moment the window opens.
 registration_minutes_before = [1440, 0]
+# Exercise groups are first-come-first-served and open at a published hour, so a
+# day-early nudge is useless - notify exactly when sign-up opens. The same pattern
+# works for any scope: exam_/course_/group_registration_minutes_before.
+group_registration_minutes_before = [0]
 registration_color_id = "5"   # banana
