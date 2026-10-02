@@ -21,3 +21,4 @@ deleted_untagged_backup.json
 
 # --- scratch ---------------------------------------------------------------
 wftest/
+cloud_test_baseline.json
