@@ -35,18 +35,3 @@ jobs:
 
       - name: Run tests
         run: python -m pytest -v
-
-      - name: Check the example config stays loadable and complete
-        # It is the entry point for a fresh setup, and it silently rotted once already.
-        run: |
-          python - <<'PY'
-          import tomllib, pathlib, sys
-          sys.path.insert(0, ".")
-          from tiss_sync import load_config
-          example = tomllib.loads(
-              pathlib.Path("config.example.toml").read_text(encoding="utf-8"))
-          cfg = load_config(pathlib.Path("config.example.toml"))
-          for section in ("titles", "exercises", "scrape", "retention", "reminders"):
-              assert section in example, f"[{section}] missing from config.example.toml"
-          print("config.example.toml loads and documents every section")
-          PY

@@ -5,8 +5,8 @@ from datetime import date
 
 import pytest
 
-from tisscal.config import (ConfigError, Exercises, Reminders, Retention, Scrape,
-                            Settings, from_dict)
+from tisscal.config import (SECTIONS, ConfigError, Exercises, Reminders, Retention,
+                            Scrape, Settings, from_dict)
 
 
 class TestDefaults:
@@ -127,3 +127,24 @@ def test_the_committed_settings_validate(name):
     raw = tomllib.loads((Path(__file__).resolve().parent.parent / name)
                         .read_text(encoding="utf-8"))
     assert isinstance(from_dict(raw), Settings)
+
+
+def test_the_settings_file_documents_every_section():
+    """settings.toml is the worked example a fresh setup copies from, so every section the
+    loader understands should appear in it. An option nobody reading the file can see is
+    an option nobody uses.
+
+    Derived from config.SECTIONS rather than a written-out list, so adding a section to
+    config.py fails here until the example documents it. This check used to live in the CI
+    workflow against config.example.toml - which meant it could not fail on anyone's
+    machine, and when that file was deleted the step broke instead of the test telling us.
+    """
+    import tomllib
+    from pathlib import Path
+
+    raw = tomllib.loads((Path(__file__).resolve().parent.parent / "settings.toml")
+                        .read_text(encoding="utf-8"))
+    # titles is a plain field rather than a dataclass section, but it is written as one.
+    expected = set(SECTIONS) | {"titles"}
+    missing = sorted(expected - set(raw))
+    assert not missing, f"settings.toml documents no {missing}"
