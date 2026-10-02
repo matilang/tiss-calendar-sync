@@ -85,6 +85,14 @@ def cmd_sync(events: list[Lecture], settings: Settings, base: Path) -> None:
     from googleapiclient.errors import HttpError
     from gcal_auth import get_service
 
+    if not settings.calendar_id:
+        # Checked here rather than at load time: list, preview and export all work
+        # without a calendar, and only this command writes to one.
+        from . import secrets as sec
+
+        sys.exit(f"No calendar id for profile {settings.profile!r}. Set one of:\n"
+                 f"{sec.sources('calendar_id', settings.profile)}")
+
     svc = get_service(base)
     cal_id = settings.calendar_id
     wanted = {ev.gcal_id: ev for ev in events}

@@ -26,16 +26,23 @@ Requires Python 3.11+ (the config is read with `tomllib`).
    pip install -r requirements.txt
    ```
 
-2. **Config** — copy `config.example.toml` to `config.toml`, paste your TISS iCal link
-   (TISS → your calendar → iCal export) and set the semester dates. Then
+2. **Settings and secrets are separate files.** `settings.toml` holds the courses,
+   titles, reminders and filters and **is committed**; `.secrets.toml` holds the two
+   private values and is **never** committed. Copy `.secrets.example.toml` to
+   `.secrets.toml` and paste your TISS iCal link (TISS → your calendar → iCal export)
+   and your calendar ID into it. Then
 
    ```bash
    python tiss_sync.py list       # every course in the feed, with first/last date
    python tiss_sync.py preview    # exactly what would be synced, writes nothing
    ```
 
-   and put the courses you want into `courses`. `config.example.toml` documents every
-   option; the ones worth knowing about are described under *Behaviour* below.
+   and put the courses you want into `courses` in `settings.toml`, which documents
+   every option inline; the ones worth knowing about are under *Behaviour* below.
+
+   Either value can also come from the environment — `TISSCAL_ICAL_URL` and
+   `TISSCAL_CALENDAR_ID` take precedence over the file, which is how the cloud run gets
+   them without a copy of the settings living in a repository secret.
 
 3. **Google access** — two ways in.
 
@@ -48,7 +55,7 @@ Requires Python 3.11+ (the config is read with `tomllib`).
    - In Google Calendar create a calendar ("TU Wien"), open *Settings and sharing* →
      *Share with specific people* → add the service account's address
      (`…@…iam.gserviceaccount.com`) with **Make changes to events**.
-   - Put that calendar's ID into `config.toml`.
+   - Put that calendar's ID into `.secrets.toml` (or `TISSCAL_CALENDAR_ID`).
 
    **Your own Google account (OAuth).** *Credentials* → OAuth client ID → type
    **Desktop app** → save as `credentials.json`. The first sync opens a browser.
@@ -74,7 +81,7 @@ import — but then there are no automatic updates.
 ## Commands
 
 ```bash
-python tiss_sync.py list|preview|export|sync [-c config.toml]
+python tiss_sync.py list|preview|export|sync [-c settings.toml]
 python tiss_scrape.py 186814 194187        # exam dates, registration windows, group hours
 python tiss_scrape.py 186814 --json
 python cleanup_imported.py [--apply]       # remove events imported into the calendar by hand
@@ -90,7 +97,8 @@ and the same commands work as `python -m tisscal.cli` and `python -m tisscal.scr
 | module | what is in it |
 |---|---|
 | `tisscal/model.py` | the `Lecture` event type and the constants defining event identity |
-| `tisscal/config.py` | reading `config.toml`, defaulting every option |
+| `tisscal/config.py` | reading `settings.toml`, defaulting every option |
+| `tisscal/secrets.py` | where the iCal URL and calendar ID come from, separately |
 | `tisscal/feed.py` | fetching and parsing an iCal feed |
 | `tisscal/pipeline.py` | **the rules**: filtering, placeholders, exercises, merging, titles, pruning |
 | `tisscal/scrape.py` | reading exam dates and registration windows off a TISS course page |
@@ -122,9 +130,11 @@ number is dropped from the title: `186.814 VU Algorithmics` → `VU Algorithmics
 `VU Management of Graph Data` → `VU MoGD`. TUWEL titles never name their course, so the
 short name is put in front there instead.
 
-**TUWEL needs no extra code.** It is just another `.ics` URL — see `tuwel.example.toml`.
-Events are tagged per config filename (`tiss_sync-tuwel` vs `tiss_sync-config`), so two
-configs can never delete each other's events. TUWEL keeps previous years' course
+**TUWEL needs no extra code.** It is just another `.ics` URL — see `settings.tuwel.toml`.
+Events are tagged per profile (`tiss_sync-tuwel` vs `tiss_sync-config`), so two profiles
+can never delete each other's events. The profile is named by the `profile` key rather
+than taken from the file name, so renaming a settings file cannot orphan the events it
+already owns. TUWEL keeps previous years' course
 instances, which is why the course is read from the iCal `CATEGORIES` field
 (`192.161-2026W`) and stale semesters can be excluded with `exclude_keywords`.
 
@@ -140,18 +150,25 @@ Tick *"Run task as soon as possible after a scheduled start is missed"* in `task
 otherwise a run is simply skipped when the machine is off.
 
 **Always-on** — `.github/workflows/sync.yml` runs it daily on GitHub Actions, so the
-laptop does not need to be on. In a **private** repository, add three secrets under
-*Settings → Secrets and variables → Actions*:
+laptop does not need to be on. The settings come from the checkout; only the private
+values are secrets. Under *Settings → Secrets and variables → Actions*:
 
 | secret | contents |
 |---|---|
 | `SERVICE_ACCOUNT_JSON` | all of `service_account.json` |
-| `CONFIG_TOML` | all of `config.toml` |
-| `TUWEL_TOML` | all of `tuwel.toml` (optional; omit to skip TUWEL) |
+| `TISS_ICAL_URL` | the TISS iCal link |
+| `GOOGLE_CALENDAR_ID` | the target calendar's ID |
+| `TUWEL_ICAL_URL` | the TUWEL export link (optional; omit to skip TUWEL) |
 
-Two caveats: GitHub disables scheduled workflows in a repository with no activity for 60
-days, and the secrets are a frozen copy — change `config.toml` locally and you must update
-the secret too, or the cloud keeps syncing the old version.
+Because the settings are in git, **adding a course is an ordinary commit** — the secrets
+only change when a token does. An earlier version pasted all of `config.toml` into a
+`CONFIG_TOML` secret, which meant every settings change had to be made twice; forgetting
+the second half left the cloud quietly syncing an older course list.
+
+Keep the repository **private** anyway: `settings.toml` names the courses you take.
+
+One caveat remains: GitHub disables scheduled workflows in a repository with no activity
+for 60 days.
 
 ## Notes
 

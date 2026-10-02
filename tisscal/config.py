@@ -8,6 +8,10 @@ copy, and a misspelled key did nothing at all, silently.
 Unknown keys are now an error. A typo like `placeholder_min_hour` used to leave the real
 setting at its default and give no hint; it now names the offending key and, where it can,
 the one you probably meant.
+
+The two private values - the iCal URL and the calendar id - are not read from here by
+preference; see secrets.py. They may still be written in the settings file, so a
+single-file config from before the split keeps working.
 """
 from __future__ import annotations
 
@@ -18,6 +22,8 @@ from dataclasses import dataclass, field, fields, replace
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Any, Mapping
+
+from . import secrets
 
 SOURCE_TAG = "tiss_sync"
 
@@ -101,8 +107,19 @@ class Settings:
     retention: Retention = field(default_factory=Retention)
     scrape: Scrape = field(default_factory=Scrape)
     reminders: Reminders = field(default_factory=Reminders)
-    # Marks the events this config owns. Two configs never delete each other's events.
-    tag: str = f"{SOURCE_TAG}-config"
+    # Which set of events on the calendar this config owns. The cleanup pass only deletes
+    # events carrying its own tag, so two profiles never delete each other's.
+    #
+    # Set explicitly rather than taken from the file name, because the name is allowed to
+    # change and the identity is not: renaming config.toml to settings.toml while the tag
+    # followed the file would leave 100-odd live events tagged tiss_sync-config that no
+    # sync owns any more, so nothing would ever clean them up. Nothing would break
+    # loudly either - they would simply stay on the calendar for good.
+    profile: str = "config"
+
+    @property
+    def tag(self) -> str:
+        return f"{SOURCE_TAG}-{self.profile}"
 
     def replace(self, **changes: Any) -> "Settings":
         """A copy with some fields changed - handy in tests, and keeps this immutable."""
@@ -146,8 +163,12 @@ def _build(cls: type, raw: Mapping[str, Any], where: str) -> Any:
     return cls(**values)
 
 
-def from_dict(raw: Mapping[str, Any], tag: str = f"{SOURCE_TAG}-config") -> Settings:
-    """Settings from parsed TOML, rejecting anything it does not recognise."""
+def from_dict(raw: Mapping[str, Any], profile: str = "config") -> Settings:
+    """Settings from parsed TOML, rejecting anything it does not recognise.
+
+    `profile` is the default identity; a `profile` key in the file itself wins, which is
+    what keeps the tag stable when the file is renamed.
+    """
     raw = dict(raw)
     flat_known = [f.name for f in fields(Settings)]
     allowed = set(flat_known) | set(SECTIONS) | set(NESTED_FIELDS)
@@ -157,7 +178,9 @@ def from_dict(raw: Mapping[str, Any], tag: str = f"{SOURCE_TAG}-config") -> Sett
         raise ConfigError("\n".join(
             f"unknown option {k!r}{_suggest(k, sorted(allowed))}" for k in unknown))
 
-    values: dict[str, Any] = {"tag": tag}
+    # The trailing loop over `raw` runs last, so a `profile` key in the file overrides
+    # this default rather than the other way round.
+    values: dict[str, Any] = {"profile": profile}
 
     for section, inner_keys in NESTED_FIELDS.items():
         inner = raw.pop(section, {})
@@ -182,16 +205,40 @@ def from_dict(raw: Mapping[str, Any], tag: str = f"{SOURCE_TAG}-config") -> Sett
     return Settings(**values)
 
 
-def load_config(path: Path) -> Settings:
-    """Read a config file. Exits with a readable message rather than a traceback."""
+def load_config(path: Path, *, secrets_path: Path | None = None,
+                env: Mapping[str, str] | None = None) -> Settings:
+    """Read a settings file and fill in its secrets. Exits with a readable message.
+
+    Secrets come from the environment, then .secrets.toml beside the settings file, then
+    the settings file itself - see secrets.py. Anything already in the settings file is
+    therefore still honoured, which is what lets a pre-split config.toml run unchanged.
+    """
     if not path.exists():
-        sys.exit(f"Config not found: {path}\n"
-                 f"Copy config.example.toml to config.toml first.")
+        sys.exit(f"Settings file not found: {path}\n"
+                 f"Copy settings.toml from the repository, or pass -c <file>.")
     with path.open("rb") as f:
         raw = tomllib.load(f)
+
+    # Each file reports its own errors. Wrapping both in one handler put the settings
+    # file's name above a complaint about .secrets.toml, which sends you to the wrong one.
     try:
-        # The tag is the file's own name, so config.toml and tuwel.toml own separate
-        # events on the same calendar and neither can delete the other's.
-        return from_dict(raw, tag=f"{SOURCE_TAG}-{path.stem}")
+        settings = from_dict(raw, profile=path.stem)
     except ConfigError as e:
         sys.exit(f"{path}:\n{e}")
+
+    secrets_path = secrets_path or path.parent / secrets.SECRETS_FILE
+    try:
+        raw_secrets = secrets.read_file(secrets_path)
+        secrets.validate(raw_secrets, str(secrets_path))
+    except ConfigError as e:
+        sys.exit(str(e))
+    except tomllib.TOMLDecodeError as e:
+        sys.exit(f"{secrets_path}: not valid TOML - {e}")
+
+    settings = settings.replace(
+        **secrets.resolve(settings.profile, secrets=raw_secrets, env=env))
+
+    if not settings.ical_url:
+        sys.exit(f"No iCal URL for profile {settings.profile!r}. Set one of:\n"
+                 f"{secrets.sources('ical_url', settings.profile)}")
+    return settings

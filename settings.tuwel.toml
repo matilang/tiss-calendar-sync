@@ -1,0 +1,58 @@
+# TUWEL (Moodle) deadlines. This file IS committed; the authtoken is not in it - it
+# lives in .secrets.toml under [tuwel], or in TISSCAL_ICAL_URL.
+#
+# Run with:  python tiss_sync.py sync -c settings.tuwel.toml
+#
+# Why a separate profile rather than adding the feed to settings.toml: the sync tags the
+# events it creates, and its cleanup pass only deletes events carrying its own tag. Two
+# profiles therefore never delete each other's events, and either source can be dropped
+# without touching the other.
+
+# The tag for this half: tiss_sync-tuwel. Taken from the file name before the settings /
+# secrets split, which is why it is not "settings.tuwel" - changing it would orphan the
+# TUWEL deadlines already on the calendar.
+profile = "tuwel"
+
+# TUWEL titles carry no course number ("Project Report ist fällig"), but the iCal
+# CATEGORIES field does ("192.161-2026W"), and the course filter reads it. Listing the
+# numbers explicitly means a course you drop stops syncing without further edits.
+courses = [
+  "192.161",   # Management of Graph Data
+  "192.174",   # Machine Learning for Optimization
+]
+
+# TUWEL keeps previous years' course instances, and their deadlines keep showing up in
+# the export. The semester is in CATEGORIES, so excluding the tag drops them: the feed
+# currently carries one "Registration end: Discussions (Project 1)" from 192.174-2025W,
+# which is last year's instance of a course you are taking again this year - the course
+# filter alone cannot tell the two apart.
+exclude_keywords = ["-2025W", "-2025S", "-2024W", "-2024S"]
+
+# No placeholder blocks in TUWEL, and nothing to merge - deadlines are instants.
+placeholder_min_hours = 0
+merge_parallel_rooms = false
+
+[titles]
+# TUWEL titles never name their course, so these go in front:
+# "VU MoGD Project Report ist fällig".
+"192.161" = "VU MoGD"
+"192.174" = "VU ML4Opt"
+
+[semester]
+# Matches the custom range of the TUWEL export, so nothing the feed includes gets
+# filtered back out. With a full year in the feed nothing falls out of it mid-term, so
+# the cleanup pass never deletes a deadline that still exists in TUWEL.
+start = "2026-09-26"
+end   = "2027-10-01"
+
+[reminders]
+# Everything in this feed is a deadline, so there is no "lecture" case to speak of -
+# both lists get the same 3-days-then-1-day treatment.
+lecture_minutes_before = [4320, 1440]
+exam_minutes_before = [4320, 1440]
+# TUWEL writes due dates in German ("ist fällig" = is due); without "fällig" none of the
+# submission deadlines would be recognised. "Registration" covers the group-defense and
+# discussion sign-up windows.
+exam_keywords = ["fällig", "Abgabe", "Deadline", "Submission", "due",
+                 "Registration", "Quiz", "Test", "Prüfung", "Exam"]
+exam_color_id = "6"   # tangerine, so TUWEL deadlines stand apart from TISS exams (red)

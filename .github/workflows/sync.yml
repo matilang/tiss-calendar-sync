@@ -1,15 +1,26 @@
 name: TISS calendar sync
 
-# Runs the sync without your laptop being on. Needs three repository secrets:
+# Runs the sync without your laptop being on.
+#
+# The settings - courses, titles, reminders, retention - come from settings.toml and
+# settings.tuwel.toml in this repository, so changing them is an ordinary commit. Only
+# the private values are secrets:
 #
 #   SERVICE_ACCOUNT_JSON  - the whole contents of service_account.json
-#   CONFIG_TOML           - the whole contents of config.toml  (holds the TISS feed token)
-#   TUWEL_TOML            - the whole contents of tuwel.toml   (optional; holds the TUWEL
-#                           authtoken). Leave it unset and the TUWEL step is skipped.
+#   TISS_ICAL_URL         - the TISS iCal link (its token is the secret)
+#   GOOGLE_CALENDAR_ID    - the target calendar's id
+#   TUWEL_ICAL_URL        - the TUWEL export link (optional; leave unset and the TUWEL
+#                           step is skipped)
 #
 # Settings -> Secrets and variables -> Actions -> New repository secret.
-# The repository must be private: the secrets are encrypted, but the config files they
-# recreate contain feed tokens.
+#
+# This replaced an earlier arrangement where the whole of config.toml and tuwel.toml were
+# pasted into CONFIG_TOML / TUWEL_TOML secrets. That worked, but every settings change had
+# to be made twice - once in the file, once in the secret - and forgetting the second half
+# left the cloud quietly running an older course list. Those two secrets are no longer
+# read and can be deleted.
+#
+# The repository should still be private: settings.toml names the courses you take.
 
 on:
   schedule:
@@ -42,44 +53,49 @@ jobs:
       - name: Install dependencies
         run: pip install --disable-pip-version-check -r requirements.txt
 
-      - name: Restore config and credentials from secrets
+      - name: Restore the service account key
+        id: creds
         env:
           SERVICE_ACCOUNT_JSON: ${{ secrets.SERVICE_ACCOUNT_JSON }}
-          CONFIG_TOML: ${{ secrets.CONFIG_TOML }}
-          TUWEL_TOML: ${{ secrets.TUWEL_TOML }}
+          TISS_ICAL_URL: ${{ secrets.TISS_ICAL_URL }}
+          GOOGLE_CALENDAR_ID: ${{ secrets.GOOGLE_CALENDAR_ID }}
+          TUWEL_ICAL_URL: ${{ secrets.TUWEL_ICAL_URL }}
         run: |
           set -euo pipefail
-          if [ -z "$SERVICE_ACCOUNT_JSON" ] || [ -z "$CONFIG_TOML" ]; then
-            echo "::error::SERVICE_ACCOUNT_JSON and CONFIG_TOML secrets are required."
+          missing=""
+          [ -n "$SERVICE_ACCOUNT_JSON" ] || missing="$missing SERVICE_ACCOUNT_JSON"
+          [ -n "$TISS_ICAL_URL" ]        || missing="$missing TISS_ICAL_URL"
+          [ -n "$GOOGLE_CALENDAR_ID" ]   || missing="$missing GOOGLE_CALENDAR_ID"
+          if [ -n "$missing" ]; then
+            echo "::error::missing required secret(s):$missing - add them under"
+            echo "::error::Settings -> Secrets and variables -> Actions."
             exit 1
           fi
           # printf '%s', not echo: keeps the JSON byte-exact and adds no stray newline.
           printf '%s' "$SERVICE_ACCOUNT_JSON" > service_account.json
-          printf '%s' "$CONFIG_TOML" > config.toml
-          if [ -n "$TUWEL_TOML" ]; then
-            printf '%s' "$TUWEL_TOML" > tuwel.toml
+          # Fail early and clearly if the key was pasted truncated or mangled.
+          python -c "import json; json.load(open('service_account.json'))"
+          echo "key parsed cleanly"
+          if [ -n "$TUWEL_ICAL_URL" ]; then
             echo "tuwel=yes" >> "$GITHUB_OUTPUT"
           fi
-          # Fail early and clearly if a secret was pasted truncated or mangled.
-          python - <<'PY'
-          import json, tomllib, pathlib
-          json.loads(pathlib.Path("service_account.json").read_text(encoding="utf-8"))
-          tomllib.loads(pathlib.Path("config.toml").read_text(encoding="utf-8"))
-          p = pathlib.Path("tuwel.toml")
-          if p.exists():
-              tomllib.loads(p.read_text(encoding="utf-8"))
-          print("secrets parsed cleanly")
-          PY
-        id: creds
 
       - name: Sync TISS lectures, exams and registration reminders
-        run: python tiss_sync.py sync
+        env:
+          # The secrets reach the sync through the environment, which takes precedence
+          # over .secrets.toml - the file that does not exist here, and should not.
+          TISSCAL_ICAL_URL: ${{ secrets.TISS_ICAL_URL }}
+          TISSCAL_CALENDAR_ID: ${{ secrets.GOOGLE_CALENDAR_ID }}
+        run: python tiss_sync.py sync -c settings.toml
 
       - name: Sync TUWEL deadlines
         if: steps.creds.outputs.tuwel == 'yes'
-        run: python tiss_sync.py sync -c tuwel.toml
+        env:
+          TISSCAL_ICAL_URL: ${{ secrets.TUWEL_ICAL_URL }}
+          TISSCAL_CALENDAR_ID: ${{ secrets.GOOGLE_CALENDAR_ID }}
+        run: python tiss_sync.py sync -c settings.tuwel.toml
 
-      - name: Shred credentials
-        # always(): they must not survive a failed run either.
+      - name: Shred the key
+        # always(): it must not survive a failed run either.
         if: always()
-        run: rm -f service_account.json config.toml tuwel.toml
+        run: rm -f service_account.json

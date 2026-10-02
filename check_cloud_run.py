@@ -52,7 +52,7 @@ def main() -> None:
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--canary", action="store_true",
                     help="plant the canary and record what the title should be")
-    ap.add_argument("-c", "--config", default="config.toml")
+    ap.add_argument("-c", "--config", default="settings.toml")
     args = ap.parse_args()
 
     base_dir = Path(__file__).resolve().parent

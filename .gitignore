@@ -1,6 +1,12 @@
 # --- secrets: never commit these -------------------------------------------
 # The TISS iCal URL embeds a private token, TUWEL's embeds an authtoken, and the
 # service account key is a full credential for the calendar.
+#
+# Only these are private. The settings themselves - courses, titles, reminders -
+# are committed on purpose, in settings.toml and settings.tuwel.toml.
+.secrets.toml
+# Pre-split single-file configs, which carried the token inline. Kept ignored so an
+# old working copy cannot leak one.
 config.toml
 tuwel.toml
 service_account.json

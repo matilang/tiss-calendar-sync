@@ -45,9 +45,9 @@ class TestDefaults:
         assert s.calendar_id == "x@group.calendar.google.com"
         assert s.exercises.hide_for == ("186.814",)
 
-    def test_the_tag_comes_from_the_file_name(self):
-        """config.toml and tuwel.toml must own separate events on one calendar."""
-        assert from_dict({}, tag="tiss_sync-tuwel").tag == "tiss_sync-tuwel"
+    def test_the_tag_comes_from_the_profile(self):
+        """Each profile must own separate events on one calendar."""
+        assert from_dict({}, profile="tuwel").tag == "tiss_sync-tuwel"
 
 
 class TestRejectsTypos:
@@ -112,14 +112,18 @@ def test_settings_replace_keeps_the_original_untouched():
     assert other.courses == ("194.187",)
 
 
-def test_the_example_config_loads(tmp_path):
-    """config.example.toml is the entry point for a fresh setup, and it has rotted
-    before. If it stops being valid, this fails rather than the next person's first run."""
+@pytest.mark.parametrize("name", ["settings.toml", "settings.tuwel.toml"])
+def test_the_committed_settings_validate(name):
+    """These are what actually runs, locally and in the cloud, and they are also the
+    worked example a fresh setup starts from - the role config.example.toml used to play,
+    back when the real file could not be committed because the token was in it.
+
+    Strict validation is the point: an option renamed in config.py and not here would
+    otherwise only surface as a sync that quietly stopped honouring a setting.
+    """
     import tomllib
     from pathlib import Path
 
-    raw = tomllib.loads(
-        (Path(__file__).resolve().parent.parent / "config.example.toml")
-        .read_text(encoding="utf-8"))
-    settings = from_dict(raw)
-    assert isinstance(settings, Settings)
+    raw = tomllib.loads((Path(__file__).resolve().parent.parent / name)
+                        .read_text(encoding="utf-8"))
+    assert isinstance(from_dict(raw), Settings)

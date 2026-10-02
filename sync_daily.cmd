@@ -21,9 +21,9 @@ REM TISS lectures, exams and registration deadlines
 ".venv\Scripts\python.exe" tiss_sync.py sync>> sync.log 2>&1
 if errorlevel 1 echo [%date% %time%] TISS sync FAILED with code %errorlevel%>> sync.log
 
-REM TUWEL deadlines - only runs once tuwel.toml exists
-if exist "tuwel.toml" (
-    ".venv\Scripts\python.exe" tiss_sync.py sync -c tuwel.toml>> sync.log 2>&1
+REM TUWEL deadlines - only runs once its settings file exists
+if exist "settings.tuwel.toml" (
+    ".venv\Scripts\python.exe" tiss_sync.py sync -c settings.tuwel.toml>> sync.log 2>&1
     if errorlevel 1 echo [%date% %time%] TUWEL sync FAILED with code %errorlevel%>> sync.log
 )
 

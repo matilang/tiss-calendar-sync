@@ -20,7 +20,7 @@ Commands
 --------
   python -m tisscal.scrape 186814 194187     # report dates, exams and deadlines
   python -m tisscal.scrape 186814 --json        # same data as JSON
-  python -m tisscal.scrape --config config.toml  # courses from [scrape].courses
+  python -m tisscal.scrape --config settings.toml  # courses from [scrape].courses
 """
 from __future__ import annotations
 

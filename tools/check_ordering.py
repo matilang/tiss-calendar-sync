@@ -95,7 +95,9 @@ def run_tests() -> list[str]:
 
 
 def main() -> None:
-    original = PIPELINE.read_text(encoding="utf-8")
+    # Byte-level, not write_text: the latter rewrites every line ending to the
+    # platform default, so restoring the file left it churned on Windows.
+    original = PIPELINE.read_bytes().decode("utf-8")
     try:
         baseline = region(original)
     except ValueError:
@@ -108,7 +110,8 @@ def main() -> None:
 
         unnoticed = []
         for label, order in MUTATIONS.items():
-            PIPELINE.write_text(original.replace(baseline, body(order)), encoding="utf-8")
+            PIPELINE.write_bytes(
+                original.replace(baseline, body(order)).encode("utf-8"))
             failures = run_tests()
             if failures:
                 print(f"  caught    {label}")
@@ -118,7 +121,7 @@ def main() -> None:
                 print(f"  UNNOTICED {label}")
                 unnoticed.append(label)
     finally:
-        PIPELINE.write_text(original, encoding="utf-8")
+        PIPELINE.write_bytes(original.encode("utf-8"))
         print("\npipeline.py restored")
 
     if unnoticed:

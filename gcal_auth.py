@@ -2,7 +2,8 @@
 
 Two ways in, tried in this order:
 
-1. `service_account.json` - a service account key. Preferred for anything unattended.
+1. a service account key - `service_account.json`, or wherever TISSCAL_SERVICE_ACCOUNT
+   points. Preferred for anything unattended.
    No browser, no consent screen, and no token that expires: the key is the credential.
    The service account only sees calendars you explicitly share with its address, which
    is exactly what we want - it can touch the TU Wien calendar and nothing else.
@@ -13,6 +14,7 @@ Two ways in, tried in this order:
    Publishing the app would fix that, but Google now demands a branding page with a
    homepage and privacy policy on a domain you own - hence option 1.
 """
+import os
 from pathlib import Path
 
 from google.auth.transport.requests import Request
@@ -22,9 +24,18 @@ from googleapiclient.discovery import build
 
 SCOPES = ["https://www.googleapis.com/auth/calendar.events"]
 
+# Where the key lives, overridable so the key itself never has to sit in the repository
+# directory - the one place a stray `git add -A` could reach it.
+KEY_ENV = "TISSCAL_SERVICE_ACCOUNT"
+
+
+def _key_file(base: Path) -> Path:
+    override = os.environ.get(KEY_ENV)
+    return Path(override) if override else base / "service_account.json"
+
 
 def get_service(base: Path):
-    key_file = base / "service_account.json"
+    key_file = _key_file(base)
     if key_file.exists():
         from google.oauth2 import service_account
 
@@ -51,7 +62,7 @@ def get_service(base: Path):
 
 def whoami(base: Path) -> str:
     """Which identity will be used - handy when a share is missing and nothing syncs."""
-    key_file = base / "service_account.json"
+    key_file = _key_file(base)
     if key_file.exists():
         import json
 

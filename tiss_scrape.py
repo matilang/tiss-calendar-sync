@@ -5,7 +5,7 @@ tisscal/scrape.py.
 
   python tiss_scrape.py 186814 194187     # exam dates, registration windows, group hours
   python tiss_scrape.py 186814 --json
-  python tiss_scrape.py --config config.toml
+  python tiss_scrape.py --config settings.toml
 
 Equivalent to `python -m tisscal.scrape`.
 """

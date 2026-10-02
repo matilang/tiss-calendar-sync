@@ -29,7 +29,7 @@ def cmd_list(events: list[Lecture]) -> None:
     for key, evs in sorted(groups.items(), key=lambda kv: kv[1][-1].start_dt, reverse=True):
         first, last = evs[0].start_dt.date(), evs[-1].start_dt.date()
         print(f"{key:<12} {len(evs):>6}  {first}  {last}  {evs[0].summary[:50]}")
-    print("\nCopy the course numbers you want into `courses = [...]` in config.toml.")
+    print("\nCopy the course numbers you want into `courses = [...]` in settings.toml.")
 
 
 def cmd_preview(events: list[Lecture], settings: Settings) -> None:
@@ -70,16 +70,17 @@ def cmd_export(events: list[Lecture], out: Path) -> None:
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("command", choices=["list", "preview", "export", "sync"])
-    ap.add_argument("-c", "--config", default="config.toml")
+    ap.add_argument("-c", "--config", default="settings.toml",
+                    help="settings file; secrets come from .secrets.toml or the environment")
     ap.add_argument("-o", "--out", default="tiss_clean.ics", help="output file for `export`")
     args = ap.parse_args()
 
-    # The project directory, not the package directory: config.toml, token.json and
-    # service_account.json all live next to the repository root.
+    # The project directory, not the package directory: settings.toml, .secrets.toml
+    # and service_account.json all live next to the repository root.
     base = Path(__file__).resolve().parent.parent
     cfg_path = Path(args.config) if Path(args.config).is_absolute() else base / args.config
-    # load_config derives the event tag from the file name, so config.toml and
-    # tuwel.toml own separate events and neither can delete the other's.
+    # The event tag comes from the file's `profile` key, so the TISS and TUWEL
+    # settings own separate events and neither can delete the other's.
     settings = load_config(cfg_path)
 
     events = parse_feed(fetch_feed(settings.ical_url))

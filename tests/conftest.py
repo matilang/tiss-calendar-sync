@@ -70,7 +70,7 @@ def cfg():
             "group_registration_minutes_before": [0],
             "registration_color_id": "5",
         },
-    }, tag="tiss_sync-test")
+    }, profile="test")
 
 
 def make_event(course_nr="186.814", summary="186.814 VU Algorithmics",

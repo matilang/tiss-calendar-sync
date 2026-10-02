@@ -3,7 +3,8 @@
 Where things live:
 
     model.py     the Lecture event type and the constants that define identity
-    config.py    reading config.toml and defaulting every option
+    config.py    reading settings.toml and defaulting every option
+    secrets.py   where the iCal URL and calendar id come from, separately
     feed.py      fetching and parsing an iCal feed
     classify.py  is this an exercise? an exam?
     filters.py   which events belong on the calendar at all

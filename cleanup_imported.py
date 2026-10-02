@@ -34,7 +34,7 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--apply", action="store_true", help="perform the deletions")
-    ap.add_argument("-c", "--config", default="config.toml")
+    ap.add_argument("-c", "--config", default="settings.toml")
     args = ap.parse_args()
 
     base = Path(__file__).resolve().parent
