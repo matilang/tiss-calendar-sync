@@ -91,53 +91,56 @@ class TestScrapedEvents:
                                   "registration_kinds": ["exam", "course", "group"],
                                   "registration_close_reminder": True})
 
-    @pytest.fixture(autouse=True)
-    def _no_network(self, monkeypatch, course):
-        monkeypatch.setattr(ts, "scrape", lambda numbers, semester: [course])
+    @pytest.fixture
+    def build(self, course):
+        """scraped_events with the fetch injected - no network, no monkeypatching."""
+        def _build(cfg):
+            return T.scraped_events(cfg, scraper=lambda numbers, semester: [course])
+        return _build
 
-    def test_builds_one_event_per_exam(self, cfg_scrape):
-        exams = [e for e in T.scraped_events(cfg_scrape) if e.kind == "exam"]
+    def test_builds_one_event_per_exam(self, cfg_scrape, build):
+        exams = [e for e in build(cfg_scrape) if e.kind == "exam"]
         assert len(exams) == 3
         assert all(e.course_nr == "186.814" for e in exams)
 
-    def test_exam_title_uses_the_short_label(self, cfg_scrape):
-        exams = [e for e in T.scraped_events(cfg_scrape) if e.kind == "exam"]
+    def test_exam_title_uses_the_short_label(self, cfg_scrape, build):
+        exams = [e for e in build(cfg_scrape) if e.kind == "exam"]
         assert all(e.summary.startswith("EXAM VU Algorithmics") for e in exams)
 
-    def test_exam_room_is_kept_for_merging(self, cfg_scrape):
-        exams = [e for e in T.scraped_events(cfg_scrape) if e.kind == "exam"]
+    def test_exam_room_is_kept_for_merging(self, cfg_scrape, build):
+        exams = [e for e in build(cfg_scrape) if e.kind == "exam"]
         assert any("GM 1" in e.location for e in exams)
 
-    def test_registration_events_carry_their_scope(self, cfg_scrape):
-        regs = [e for e in T.scraped_events(cfg_scrape) if e.kind == "registration"]
+    def test_registration_events_carry_their_scope(self, cfg_scrape, build):
+        regs = [e for e in build(cfg_scrape) if e.kind == "registration"]
         assert regs
         assert {e.scope for e in regs} <= {"exam", "course", "group"}
 
-    def test_one_reminder_per_window_not_per_sitting(self, cfg_scrape):
+    def test_one_reminder_per_window_not_per_sitting(self, cfg_scrape, build):
         """Several sittings can share one registration window; reminding twice is noise."""
-        opens = [e for e in T.scraped_events(cfg_scrape)
+        opens = [e for e in build(cfg_scrape)
                  if e.kind == "registration" and "Register for" in e.summary]
         assert len(opens) == len({e.uid for e in opens})
 
-    def test_group_scope_is_set(self, cfg_scrape):
-        groups = [e for e in T.scraped_events(cfg_scrape)
+    def test_group_scope_is_set(self, cfg_scrape, build):
+        groups = [e for e in build(cfg_scrape)
                   if e.kind == "registration" and e.scope == "group"]
         assert groups
 
-    def test_registration_kinds_can_switch_scopes_off(self, cfg_scrape):
+    def test_registration_kinds_can_switch_scopes_off(self, cfg_scrape, build):
         only_exam = shift(cfg_scrape, scrape={"registration_kinds": ["exam"]})
-        scopes = {e.scope for e in T.scraped_events(only_exam) if e.kind == "registration"}
+        scopes = {e.scope for e in build(only_exam) if e.kind == "registration"}
         assert scopes == {"exam"}
 
-    def test_windows_already_open_get_no_opens_reminder(self, cfg_scrape):
+    def test_windows_already_open_get_no_opens_reminder(self, cfg_scrape, build):
         """Course registration began 2026-09-01; there is nothing left to warn about."""
-        opens = [e for e in T.scraped_events(cfg_scrape)
+        opens = [e for e in build(cfg_scrape)
                  if e.scope == "course" and "opens" in e.summary]
         assert opens == []
 
-    def test_every_event_is_in_the_future(self, cfg_scrape):
+    def test_every_event_is_in_the_future(self, cfg_scrape, build):
         now = datetime.now(T.VIENNA)
-        regs = [e for e in T.scraped_events(cfg_scrape) if e.kind == "registration"]
+        regs = [e for e in build(cfg_scrape) if e.kind == "registration"]
         assert all(e.start_dt > now - timedelta(days=1) for e in regs)
 
     def test_scraping_is_skipped_without_courses(self, cfg):

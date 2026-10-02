@@ -88,3 +88,21 @@ def shift(cfg_dict: dict, **sections) -> dict:
     for key, value in sections.items():
         out[key] = {**out.get(key, {}), **value} if isinstance(value, dict) else value
     return out
+
+
+@pytest.fixture(autouse=True)
+def no_network(monkeypatch):
+    """Fail loudly on any real HTTP call.
+
+    Not paranoia: the package refactor silently broke a monkeypatch and the scraper
+    tests started querying TISS for real. They still passed - only the runtime gave it
+    away, jumping from 0.7 s to 12 s. A test that reaches the network is not a test.
+    """
+    def forbidden(*args, **kwargs):
+        raise AssertionError(
+            "a test tried to make a real HTTP request - inject a fake instead")
+
+    import requests
+
+    monkeypatch.setattr(requests.Session, "request", forbidden)
+    monkeypatch.setattr(requests, "get", forbidden)

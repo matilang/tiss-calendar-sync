@@ -78,7 +78,29 @@ python tiss_sync.py list|preview|export|sync [-c config.toml]
 python tiss_scrape.py 186814 194187        # exam dates, registration windows, group hours
 python tiss_scrape.py 186814 --json
 python cleanup_imported.py [--apply]       # remove events imported into the calendar by hand
+python check_cloud_run.py --canary         # prove a GitHub Actions run reached the calendar
+python -m pytest                           # 79 tests, no network (pip install -r requirements-dev.txt)
 ```
+
+`tiss_sync.py` and `tiss_scrape.py` are thin entry points; the code lives in `tisscal/`
+and the same commands work as `python -m tisscal.cli` and `python -m tisscal.scrape`.
+
+## Where the code is
+
+| module | what is in it |
+|---|---|
+| `tisscal/model.py` | the `Lecture` event type and the constants defining event identity |
+| `tisscal/config.py` | reading `config.toml`, defaulting every option |
+| `tisscal/feed.py` | fetching and parsing an iCal feed |
+| `tisscal/pipeline.py` | **the rules**: filtering, placeholders, exercises, merging, titles, pruning |
+| `tisscal/scrape.py` | reading exam dates and registration windows off a TISS course page |
+| `tisscal/events.py` | turning scraped course data into calendar events |
+| `tisscal/gcal.py` | Google Calendar: event bodies, retries, the sync |
+| `tisscal/cli.py` | `list` / `preview` / `export` / `sync`, and the pipeline order |
+
+If you want to change *what shows up on the calendar*, it is almost always
+`tisscal/pipeline.py` - those are pure functions, events in and events out, and they are
+what the tests cover.
 
 `tiss_scrape.py` is worth running on its own before registering: it lists each exercise
 group with its exact hours, so you can pick a group on the timetable rather than guessing.
