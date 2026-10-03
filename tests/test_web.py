@@ -1,0 +1,297 @@
+"""The local interface: what it shows, what it writes, and what it must never send.
+
+Everything here runs offline. The Interface normally fetches the feed and scrapes TISS; in
+these tests both are supplied directly, which is also how the HTTP layer gets exercised
+without a network or a browser.
+"""
+from __future__ import annotations
+
+import json
+import threading
+import urllib.error
+import urllib.request
+from datetime import datetime, timedelta
+from http.server import ThreadingHTTPServer
+from pathlib import Path
+
+import pytest
+
+from tisscal.model import VIENNA
+from tisscal.pipeline import build_events
+from tisscal.plan import diff
+from tisscal.settings_io import as_dict
+from tisscal.web import Conflict, Handler, Interface, plan_json, survey
+from conftest import make_event, shift
+
+ROOT = Path(__file__).resolve().parent.parent
+
+BODY = {"summary": "VU Algorithmics", "location": "HS 6",
+        "start": {"dateTime": "2026-11-10T10:00:00+01:00"}}
+
+
+@pytest.fixture
+def project(tmp_path):
+    """A settings file with its secrets beside it, as a real working copy has."""
+    (tmp_path / "settings.toml").write_bytes((ROOT / "settings.toml").read_bytes())
+    (tmp_path / ".secrets.toml").write_text(
+        'calendar_id = "test@group.calendar.google.com"\n'
+        '[config]\nical_url = "https://tiss.invalid/feed?token=not-a-real-token"\n',
+        encoding="utf-8")
+    return tmp_path
+
+
+@pytest.fixture(scope="module")
+def parsed_course():
+    """The saved course page, parsed once for the whole module.
+
+    Parsing it per test made this file five times slower than the thing it models:
+    Interface.scraper() wraps the scraper in plan.once(), so in production the pages are
+    parsed once per process, not once per click.
+    """
+    import tisscal.scrape as sc
+
+    page = Path(__file__).resolve().parent / "fixtures" / "course_186814.html"
+    return [sc.parse_course(page.read_text(encoding="utf-8"), "186814", "2026W")]
+
+
+@pytest.fixture
+def interface(project, events, parsed_course):
+    """An Interface that never touches the network: feed and scraper both supplied."""
+    iface = Interface(project, "settings.toml")
+    iface._feed = events
+    iface._scraper = lambda numbers, semester: parsed_course
+    return iface
+
+
+# --------------------------------------------------------------------------- #
+class TestSurvey:
+    def test_a_course_in_the_feed_but_not_configured_still_appears(self, events, cfg):
+        """The discovery half, and the reason this table exists: a course you were just
+        admitted to is in the feed before it is in settings.toml, and nothing used to say
+        so except running `list` and reading it."""
+        settings = shift(cfg, courses=["186.814"])
+        rows = survey(events, build_events(events, settings), settings)
+        keys = {r["key"]: r for r in rows}
+        assert "194.207" in keys
+        assert keys["194.207"]["in_config"] is False
+        assert keys["194.207"]["in_feed"] > 0
+        assert keys["194.207"]["synced"] == 0
+
+    def test_in_config_follows_the_real_filter(self, events, cfg):
+        """Not a re-implementation of the course rule: a row counts as configured when its
+        events actually survive the filter, so the table cannot drift from the pipeline."""
+        settings = shift(cfg, courses=["186.814"])
+        rows = {r["key"]: r for r in survey(events, build_events(events, settings), settings)}
+        assert rows["186.814"]["in_config"] is True
+        assert rows["192.194"]["in_config"] is False
+
+    def test_scraped_events_are_counted_apart(self, events, cfg, course_html):
+        """Otherwise a course reads "28 in the feed, 39 on the calendar", which looks like
+        a bug rather than like exams coming off the course page."""
+        import tisscal.scrape as sc
+
+        settings = shift(cfg, courses=["186.814"], scrape={"courses": ["186814"]})
+        built = build_events(events, settings,
+                             scraper=lambda n, s: [sc.parse_course(course_html, "186814", s)])
+        row = {r["key"]: r for r in survey(events, built, settings)}["186.814"]
+        assert row["scraped"] > 0
+        assert row["synced"] > row["scraped"]
+        assert row["synced"] - row["scraped"] <= row["in_feed"]
+
+    def test_next_is_the_next_one_still_to_come(self, cfg):
+        past = make_event(start=datetime.now(VIENNA) - timedelta(days=5), uid="old")
+        soon = make_event(start=datetime.now(VIENNA) + timedelta(days=2), uid="soon")
+        later = make_event(start=datetime.now(VIENNA) + timedelta(days=9), uid="later")
+        row = survey([past, soon, later], [past, soon, later], cfg)[0]
+        assert row["next"].startswith(soon.start_dt.isoformat()[:10])
+
+    def test_synced_courses_come_first(self, events, cfg):
+        settings = shift(cfg, courses=["186.814"])
+        rows = survey(events, build_events(events, settings), settings)
+        synced = [bool(r["synced"]) for r in rows]
+        assert synced == sorted(synced, reverse=True)
+
+    def test_events_with_no_course_number_get_one_row(self, events, cfg):
+        rows = {r["key"] for r in survey(events, build_events(events, cfg), cfg)}
+        assert "(no course number)" in rows
+
+
+class TestPlanJson:
+    def test_the_shape_the_page_expects(self):
+        payload = plan_json(diff({"a": BODY}, {"a": BODY | {"location": "X"}}))
+        assert payload["counts"] == {"created": 0, "deleted": 0, "updated": 1, "unchanged": 0}
+        assert payload["changes"][0]["fields"] == ["location"]
+        assert payload["truncated"] is False
+
+    def test_it_is_json_serialisable(self, events, cfg):
+        """Bodies contain dates and times; a page that cannot parse them shows nothing."""
+        built = build_events(events, cfg)
+        from tisscal.plan import event_bodies
+
+        payload = plan_json(diff({}, event_bodies(built, cfg)))
+        assert json.loads(json.dumps(payload, default=str))["counts"]["created"] == len(built)
+
+    def test_a_huge_diff_is_truncated(self):
+        before = {f"id{n}": BODY for n in range(40)}
+        payload = plan_json(diff(before, {}), limit=10)
+        assert len(payload["changes"]) == 10
+        assert payload["truncated"] is True
+        assert payload["counts"]["deleted"] == 40, "the counts still describe all of it"
+
+
+class TestInterface:
+    def test_state_never_carries_the_secret_values(self, interface):
+        """A browser tab leaks through history, extensions and screenshots. The page is
+        told whether a secret is set, never what it is."""
+        blob = json.dumps(interface.state(), default=str)
+        assert "not-a-real-token" not in blob
+        assert "test@group.calendar.google.com" not in blob
+        assert interface.state()["secrets"] == {"ical_url": True, "calendar_id": True}
+
+    def test_state_reports_the_file_and_profile(self, interface):
+        state = interface.state()
+        assert state["file"] == "settings.toml"
+        assert state["profile"] == "config"
+        assert state["events"] > 0
+        assert state["settings"]["courses"]
+
+    def test_an_unchanged_draft_diffs_to_nothing(self, interface):
+        payload = interface.diff({"settings": interface.state()["settings"]})
+        assert payload["vs_file"]["counts"]["created"] == 0
+        assert payload["vs_file"]["counts"]["deleted"] == 0
+        assert payload["vs_file"]["counts"]["updated"] == 0
+
+    def test_a_draft_change_shows_up_as_a_difference(self, interface):
+        draft = interface.state()["settings"]
+        draft["exercises"]["hide_for"] = ["186.814"]
+        payload = interface.diff({"settings": draft})
+        assert payload["vs_file"]["counts"]["deleted"] > 0
+
+    def test_a_typo_in_the_draft_is_rejected(self, interface):
+        from tisscal.config import ConfigError
+
+        draft = interface.state()["settings"]
+        draft["placeholder_min_hourz"] = 4
+        with pytest.raises(ConfigError, match="did you mean"):
+            interface.diff({"settings": draft})
+
+    def test_saving_writes_the_file_and_says_what_changed(self, interface):
+        state = interface.state()
+        draft = state["settings"]
+        draft["merge_parallel_rooms"] = False
+        out = interface.save({"settings": draft, "mtime": state["mtime"]})
+        assert out["changed"]["merge_parallel_rooms"] == [True, False]
+        assert interface.settings().merge_parallel_rooms is False
+
+    def test_saving_keeps_the_comments(self, interface):
+        text = interface.path.read_text(encoding="utf-8")
+        before = sum(1 for l in text.splitlines() if l.strip().startswith("#"))
+        state = interface.state()
+        draft = state["settings"]
+        draft["exercises"]["hide_for"] = ["186.814"]
+        interface.save({"settings": draft, "mtime": state["mtime"]})
+        after = sum(1 for l in interface.path.read_text(encoding="utf-8").splitlines()
+                    if l.strip().startswith("#"))
+        assert after == before
+
+    def test_saving_over_someone_elses_edit_is_refused(self, interface):
+        """The same file is edited in VS Code. Overwriting a save made there without a word
+        would be the worst thing this page could do."""
+        state = interface.state()
+        interface.path.write_text(
+            interface.path.read_text(encoding="utf-8") + "\n# edited elsewhere\n",
+            encoding="utf-8")
+        with pytest.raises(Conflict, match="changed on disk"):
+            interface.save({"settings": state["settings"], "mtime": state["mtime"]})
+
+    def test_the_refused_save_leaves_the_other_edit_alone(self, interface):
+        state = interface.state()
+        interface.path.write_text(
+            interface.path.read_text(encoding="utf-8") + "\n# edited elsewhere\n",
+            encoding="utf-8")
+        with pytest.raises(Conflict):
+            interface.save({"settings": state["settings"], "mtime": state["mtime"]})
+        assert "# edited elsewhere" in interface.path.read_text(encoding="utf-8")
+
+    def test_saving_nothing_is_not_an_error(self, interface):
+        state = interface.state()
+        out = interface.save({"settings": state["settings"], "mtime": state["mtime"]})
+        assert out["changed"] == {}
+
+
+# --------------------------------------------------------------------------- #
+@pytest.fixture
+def server(interface):
+    """The real HTTP layer on a free port, so routing and error mapping are covered."""
+    bound = type("BoundHandler", (Handler,), {"interface": interface,
+                                              "log_message": lambda *a, **k: None})
+    httpd = ThreadingHTTPServer(("127.0.0.1", 0), bound)
+    # poll_interval, because shutdown() waits for one: at the 0.5 s default these seven
+    # tests spent three and a half seconds doing nothing but closing sockets.
+    thread = threading.Thread(target=lambda: httpd.serve_forever(poll_interval=0.02),
+                              daemon=True)
+    thread.start()
+    yield f"http://127.0.0.1:{httpd.server_address[1]}"
+    httpd.shutdown()
+    httpd.server_close()
+
+
+def fetch(url, payload=None):
+    data = None if payload is None else json.dumps(payload).encode()
+    req = urllib.request.Request(url, data=data,
+                                 headers={"Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            return r.status, r.read()
+    except urllib.error.HTTPError as e:
+        return e.code, e.read()
+
+
+class TestHttp:
+    def test_the_page_is_served(self, server):
+        code, body = fetch(server + "/")
+        assert code == 200
+        assert b"<title>" in body and b"TU Wien" in body
+
+    def test_state_is_json(self, server):
+        code, body = fetch(server + "/api/state")
+        assert code == 200
+        assert json.loads(body)["profile"] == "config"
+
+    def test_an_unknown_path_is_404_with_a_message(self, server):
+        code, body = fetch(server + "/api/nonsense")
+        assert code == 404
+        assert "error" in json.loads(body)
+
+    def test_malformed_json_is_400_not_a_traceback(self, server):
+        req = urllib.request.Request(server + "/api/diff", data=b"{not json",
+                                     headers={"Content-Type": "application/json"})
+        try:
+            urllib.request.urlopen(req, timeout=30)
+            pytest.fail("should have been rejected")
+        except urllib.error.HTTPError as e:
+            assert e.code == 400
+            assert "bad JSON" in json.loads(e.read())["error"]
+
+    def test_a_config_error_is_400_with_the_loader_message(self, server):
+        code, body = fetch(server + "/api/diff",
+                           {"settings": {"placeholder_min_hourz": 4}})
+        assert code == 400
+        assert "did you mean" in json.loads(body)["error"]
+
+    def test_a_stale_save_is_409_and_asks_for_a_reload(self, server, interface):
+        code, body = fetch(server + "/api/save",
+                           {"settings": as_dict(interface.settings()), "mtime": 1.0})
+        assert code == 409
+        payload = json.loads(body)
+        assert payload["reload"] is True
+
+    def test_a_round_trip_through_http_changes_nothing(self, server, interface):
+        """settings -> JSON -> browser -> JSON -> Settings has to be lossless, or every
+        diff would show spurious changes the moment the page loaded."""
+        _, body = fetch(server + "/api/state")
+        settings = json.loads(body)["settings"]
+        code, diff_body = fetch(server + "/api/diff", {"settings": settings})
+        assert code == 200
+        counts = json.loads(diff_body)["vs_file"]["counts"]
+        assert (counts["created"], counts["deleted"], counts["updated"]) == (0, 0, 0)

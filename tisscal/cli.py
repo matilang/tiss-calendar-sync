@@ -1,4 +1,4 @@
-"""The command line: list, preview, export, sync."""
+"""The command line: list, preview, export, sync, ui."""
 from __future__ import annotations
 
 import argparse
@@ -79,8 +79,9 @@ def _diff_settings(ref: str, cfg_path: Path) -> Settings:
     calendar id are irrelevant here - and requiring them would make `--diff HEAD` fail on
     a file that quite correctly does not contain them.
     """
-    import subprocess
     import tomllib
+
+    from . import vcs
 
     path = Path(ref)
     if path.suffix == ".toml":
@@ -88,13 +89,11 @@ def _diff_settings(ref: str, cfg_path: Path) -> Settings:
             raise SystemExit(f"No such settings file: {ref}")
         text, profile = path.read_text(encoding="utf-8"), path.stem
     else:
-        done = subprocess.run(["git", "show", f"{ref}:{cfg_path.name}"],
-                              cwd=cfg_path.parent, capture_output=True,
-                              text=True, encoding="utf-8")
-        if done.returncode != 0:
-            raise SystemExit(f"Cannot read {cfg_path.name} at {ref}: "
-                             f"{done.stderr.strip() or 'not a git working copy?'}")
-        text, profile = done.stdout, cfg_path.stem
+        text = vcs.file_at(cfg_path.parent, cfg_path.name, ref)
+        if text is None:
+            raise SystemExit(f"Cannot read {cfg_path.name} at {ref} - "
+                             f"no such revision, or not a git working copy.")
+        profile = cfg_path.stem
 
     try:
         return from_dict(tomllib.loads(text), profile=profile)
@@ -104,7 +103,7 @@ def _diff_settings(ref: str, cfg_path: Path) -> Settings:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("command", choices=["list", "preview", "export", "sync"])
+    ap.add_argument("command", choices=["list", "preview", "export", "sync", "ui"])
     ap.add_argument("-c", "--config", default="settings.toml",
                     help="settings file; secrets come from .secrets.toml or the environment")
     ap.add_argument("-o", "--out", default="tiss_clean.ics", help="output file for `export`")
@@ -112,6 +111,9 @@ def main() -> None:
                     help="preview only: show what the current settings change compared "
                          "with REF - a git revision of the same file (default HEAD) or "
                          "another .toml file")
+    ap.add_argument("--port", type=int, default=8765, help="ui only: port to listen on")
+    ap.add_argument("--no-browser", action="store_true",
+                    help="ui only: do not open a browser window")
     args = ap.parse_args()
 
     if args.diff and args.command != "preview":
@@ -121,6 +123,15 @@ def main() -> None:
     # and service_account.json all live next to the repository root.
     base = Path(__file__).resolve().parent.parent
     cfg_path = Path(args.config) if Path(args.config).is_absolute() else base / args.config
+    if args.command == "ui":
+        # serve() loads the settings and the feed itself, and reports a usable error in the
+        # terminal rather than in a browser if either is wrong.
+        from .web import serve
+
+        serve(cfg_path.parent, cfg_path.name, port=args.port,
+              open_browser=not args.no_browser)
+        return
+
     # The event tag comes from the file's `profile` key, so the TISS and TUWEL
     # settings own separate events and neither can delete the other's.
     settings = load_config(cfg_path)

@@ -1,0 +1,528 @@
+<!-- The interface. One file: no build step, no bundler, no CDN.
+     Everything that decides anything lives in Python; this draws it and sends it back. -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TU Wien calendar sync</title>
+<style>
+  :root {
+    --bg: #fbfbfa; --panel: #fff; --line: #e3e2df; --ink: #1c1c1a; --dim: #6c6b67;
+    --accent: #2b5d8a; --add: #1a7f45; --del: #a62b2b; --mod: #8a5a10;
+    --add-bg: #eaf6ee; --del-bg: #fbecec; --mod-bg: #fcf4e6; --warn-bg: #fdf6e0;
+    --mono: ui-monospace, "Cascadia Mono", "Consolas", monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #17181a; --panel: #1f2023; --line: #32343a; --ink: #e8e8e6; --dim: #9a9b98;
+      --accent: #7fb0dd; --add: #65d394; --del: #ef8e8e; --mod: #e0b964;
+      --add-bg: #16291f; --del-bg: #2b1a1a; --mod-bg: #2a2317; --warn-bg: #2b2616;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 18px 20px 120px; }
+
+  header { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap;
+           padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+  h1 { font-size: 17px; margin: 0; font-weight: 650; letter-spacing: -0.01em; }
+  .meta { color: var(--dim); font-size: 12.5px; font-family: var(--mono); }
+  .grow { flex: 1; }
+
+  h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .08em;
+       color: var(--dim); margin: 26px 0 10px; font-weight: 650; }
+
+  .panel { background: var(--panel); border: 1px solid var(--line);
+           border-radius: 7px; overflow: hidden; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; font-weight: 600; font-size: 11px; color: var(--dim);
+       text-transform: uppercase; letter-spacing: .05em;
+       padding: 9px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  td { padding: 7px 10px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  tr:last-child td { border-bottom: 0; }
+  td.num, th.num { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  td.mid, th.mid { text-align: center; }
+  .nr { font-family: var(--mono); color: var(--dim); }
+  tr.off td:not(.mid) { opacity: .5; }
+  tr.new-course { background: var(--warn-bg); }
+
+  input[type=text], input[type=number] {
+    font: inherit; font-family: var(--mono); font-size: 12.5px;
+    background: var(--bg); color: var(--ink);
+    border: 1px solid var(--line); border-radius: 4px; padding: 3px 6px; width: 100%;
+  }
+  input[type=text]:focus, input[type=number]:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  input[type=checkbox] { width: 15px; height: 15px; accent-color: var(--accent); cursor: pointer; }
+  label.row { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+  label.row span.hint { color: var(--dim); font-family: var(--mono); font-size: 11.5px; }
+
+  .switches { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+              gap: 10px 26px; padding: 14px 16px; }
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .field > span { color: var(--dim); font-family: var(--mono); font-size: 11.5px; }
+
+  button {
+    font: inherit; font-weight: 550; padding: 6px 13px; border-radius: 5px;
+    border: 1px solid var(--line); background: var(--panel); color: var(--ink);
+    cursor: pointer;
+  }
+  button:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+  button:disabled { opacity: .45; cursor: default; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.primary:hover:not(:disabled) { filter: brightness(1.12); color: #fff; }
+
+  /* ---- diff ---- */
+  .counts { display: flex; gap: 16px; align-items: center; font-family: var(--mono);
+            font-size: 13px; padding: 11px 16px; border-bottom: 1px solid var(--line);
+            flex-wrap: wrap; }
+  .c-add { color: var(--add); } .c-del { color: var(--del); } .c-mod { color: var(--mod); }
+  .changes { max-height: 42vh; overflow: auto; }
+  .chg { display: grid; grid-template-columns: 18px 128px 1fr auto;
+         gap: 10px; align-items: baseline; padding: 4px 16px;
+         font-family: var(--mono); font-size: 12.5px; border-bottom: 1px solid var(--line); }
+  .chg:last-child { border-bottom: 0; }
+  .chg.created { background: var(--add-bg); } .chg.created .mark { color: var(--add); }
+  .chg.deleted { background: var(--del-bg); } .chg.deleted .mark { color: var(--del); }
+  .chg.updated { background: var(--mod-bg); } .chg.updated .mark { color: var(--mod); }
+  .chg .mark { font-weight: 700; }
+  .chg .when { color: var(--dim); }
+  .chg .what { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .chg .fields { color: var(--dim); font-size: 11.5px; }
+  .empty { padding: 20px 16px; color: var(--dim); }
+
+  /* ---- bottom bar ---- */
+  .bar { position: fixed; left: 0; right: 0; bottom: 0; background: var(--panel);
+         border-top: 1px solid var(--line); padding: 10px 20px;
+         display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .bar .state { font-family: var(--mono); font-size: 12.5px; }
+  .warn { background: var(--warn-bg); border: 1px solid var(--line); border-radius: 5px;
+          padding: 7px 11px; font-size: 12.5px; }
+  .err { background: var(--del-bg); color: var(--del); border: 1px solid var(--del);
+         border-radius: 5px; padding: 9px 12px; margin: 12px 0; font-size: 13px;
+         white-space: pre-wrap; font-family: var(--mono); }
+  pre.gitlog { background: var(--bg); border: 1px solid var(--line); border-radius: 5px;
+               padding: 10px; font-size: 11.5px; overflow: auto; max-height: 180px; }
+  .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+         background: var(--dim); margin-right: 5px; vertical-align: middle; }
+  .dot.on { background: var(--add); } .dot.off { background: var(--del); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>TU Wien calendar sync</h1>
+    <span class="meta" id="hdr"></span>
+    <span class="grow"></span>
+    <span class="meta" id="cacheAge"></span>
+    <button id="refresh" title="Re-fetch the feed and the TISS course pages">Refresh data</button>
+  </header>
+
+  <div id="error" class="err" style="display:none"></div>
+  <div id="notice"></div>
+
+  <h2>Courses in the feed</h2>
+  <div class="panel"><table>
+    <thead><tr>
+      <th class="mid" title="Keep this course's events on the calendar">Sync</th>
+      <th class="mid" title="Read this course's TISS page for exam dates and registration windows">Scrape</th>
+      <th class="mid" title="Hide its exercise slots until you have a group">Hide&nbsp;UE</th>
+      <th>Course</th><th>Calendar name</th>
+      <th class="num" title="Events this course has in the TISS iCal feed">Feed</th>
+      <th class="num" title="Events it would have on the calendar. Can exceed the feed count: exams and registration reminders are read off the course page, not the feed.">Calendar</th>
+      <th>Next</th>
+    </tr></thead>
+    <tbody id="courses"></tbody>
+  </table></div>
+
+  <h2>What gets synced</h2>
+  <div class="panel"><div class="switches" id="switches"></div></div>
+
+  <h2>What this would change <span id="diffScope" class="meta"></span></h2>
+  <div class="panel">
+    <div class="counts" id="counts"></div>
+    <div class="changes" id="changes"></div>
+  </div>
+
+  <h2>Git</h2>
+  <div class="panel" style="padding:14px 16px">
+    <div id="git"></div>
+    <pre class="gitlog" id="gitlog" style="display:none"></pre>
+  </div>
+</div>
+
+<div class="bar">
+  <span class="state" id="dirty">loading…</span>
+  <span class="grow"></span>
+  <button id="discard" disabled>Discard edits</button>
+  <button id="save" class="primary" disabled>Apply to settings.toml</button>
+</div>
+
+<script>
+"use strict";
+
+let state = null;      // as the server last reported it
+let draft = null;      // what the page has, before Apply
+let diffTimer = null;
+
+const $ = (id) => document.getElementById(id);
+const clone = (o) => JSON.parse(JSON.stringify(o));
+const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+
+async function call(path, body) {
+  const res = await fetch(path, body === undefined ? {} : {
+    method: "POST", headers: {"Content-Type": "application/json"},
+    body: JSON.stringify(body)
+  });
+  const data = await res.json().catch(() => ({error: res.statusText}));
+  if (!res.ok) { const e = new Error(data.error || res.statusText); e.data = data; throw e; }
+  return data;
+}
+
+function showError(msg) {
+  const box = $("error");
+  if (!msg) { box.style.display = "none"; return; }
+  box.textContent = msg;
+  box.style.display = "block";
+}
+
+// ---- draft accessors -------------------------------------------------------
+// The draft mirrors the TOML document, so a path is just section.key. Keeping it in that
+// shape means the server can hand it straight to from_dict with nothing in between.
+function get(path) {
+  return path.split(".").reduce((o, k) => (o === undefined ? o : o[k]), draft);
+}
+function put(path, value) {
+  const keys = path.split(".");
+  const last = keys.pop();
+  let o = draft;
+  for (const k of keys) { if (o[k] === undefined || o[k] === null) o[k] = {}; o = o[k]; }
+  o[last] = value;
+  changed();
+}
+function inList(path, value) {
+  const list = get(path) || [];
+  return list.includes(value);
+}
+function toggleList(path, value, on) {
+  const list = (get(path) || []).slice();
+  const at = list.indexOf(value);
+  if (on && at < 0) list.push(value);
+  if (!on && at >= 0) list.splice(at, 1);
+  put(path, list);
+}
+
+// ---- rendering -------------------------------------------------------------
+function fmtWhen(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d)) return iso.slice(0, 16).replace("T", " ");
+  const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const p = (n) => String(n).padStart(2, "0");
+  const time = iso.length > 10 ? ` ${p(d.getHours())}:${p(d.getMinutes())}` : "";
+  return `${days[d.getDay()]} ${p(d.getDate())}.${p(d.getMonth() + 1)}${time}`;
+}
+
+function renderHeader() {
+  $("hdr").textContent =
+    `${state.file} · profile ${state.profile} · ${state.events} events`;
+  const ages = Object.values(state.cache);
+  const oldest = ages.length ? Math.max(...ages) : null;
+  $("cacheAge").textContent = oldest === null ? "nothing cached"
+    : `data fetched ${oldest < 90 ? oldest + "s" : Math.round(oldest / 60) + " min"} ago`;
+
+  const notes = [];
+  if (!state.secrets.calendar_id)
+    notes.push("No calendar id is set, so nothing can be synced yet - put it in .secrets.toml.");
+  if (!state.secrets.ical_url)
+    notes.push("No feed URL is set.");
+  $("notice").innerHTML = notes.map((n) => `<div class="warn">${n}</div>`).join("");
+}
+
+function renderCourses() {
+  const body = $("courses");
+  body.innerHTML = "";
+  for (const c of state.courses) {
+    const nr = c.course_nr;
+    const tr = document.createElement("tr");
+    const synced = inList("courses", nr) || (nr === "" ? false : false);
+    const configured = nr ? inList("courses", nr) : c.in_config;
+    if (!configured) tr.classList.add("off");
+    if (!c.in_config && nr) tr.classList.add("new-course");
+
+    // Sync
+    const sync = document.createElement("td"); sync.className = "mid";
+    if (nr) {
+      sync.appendChild(checkbox(configured, (on) => toggleList("courses", nr, on)));
+    } else {
+      sync.innerHTML = `<span class="meta" title="Kept by a title fragment in courses, not by number">—</span>`;
+    }
+    tr.appendChild(sync);
+
+    // Scrape
+    const scr = document.createElement("td"); scr.className = "mid";
+    const bare = nr.replace(".", "");
+    if (nr) {
+      scr.appendChild(checkbox(inList("scrape.courses", bare),
+        (on) => toggleList("scrape.courses", bare, on)));
+    } else { scr.textContent = ""; }
+    tr.appendChild(scr);
+
+    // Hide exercises
+    const hide = document.createElement("td"); hide.className = "mid";
+    if (nr) {
+      hide.appendChild(checkbox(inList("exercises.hide_for", nr),
+        (on) => toggleList("exercises.hide_for", nr, on)));
+    } else { hide.textContent = ""; }
+    tr.appendChild(hide);
+
+    const name = document.createElement("td");
+    name.innerHTML = `<span class="nr">${c.key}</span>`;
+    tr.appendChild(name);
+
+    const label = document.createElement("td");
+    if (nr) {
+      const input = document.createElement("input");
+      input.type = "text";
+      input.placeholder = c.feed_title.replace(nr, "").trim().slice(0, 40);
+      input.value = (draft.titles || {})[nr] || "";
+      input.addEventListener("input", () => {
+        const titles = Object.assign({}, draft.titles || {});
+        if (input.value.trim()) titles[nr] = input.value.trim(); else delete titles[nr];
+        put("titles", titles);
+      });
+      label.appendChild(input);
+    } else {
+      label.innerHTML = `<span class="meta">${c.feed_title.slice(0, 40)}</span>`;
+    }
+    tr.appendChild(label);
+
+    const scraped = c.scraped
+      ? `<span style="opacity:.6" title="${c.scraped} from the course page, not the feed">` +
+        `+${c.scraped}</span>`
+      : "";
+    tr.insertAdjacentHTML("beforeend",
+      `<td class="num">${c.in_feed}</td>` +
+      `<td class="num">${c.synced - c.scraped}${scraped}</td>` +
+      `<td class="meta">${fmtWhen(c.next)}</td>`);
+    body.appendChild(tr);
+  }
+}
+
+function checkbox(on, onChange) {
+  const input = document.createElement("input");
+  input.type = "checkbox";
+  input.checked = !!on;
+  input.addEventListener("change", () => onChange(input.checked));
+  return input;
+}
+
+function boolSwitch(label, path, hint) {
+  const el = document.createElement("label");
+  el.className = "row";
+  el.appendChild(checkbox(get(path), (on) => put(path, on)));
+  el.insertAdjacentHTML("beforeend",
+    `<span>${label}</span><span class="hint">${hint || path}</span>`);
+  return el;
+}
+
+function listField(label, path, hint) {
+  const wrap = document.createElement("div");
+  wrap.className = "field";
+  wrap.innerHTML = `<span>${label} <em style="opacity:.7">${hint || path}</em></span>`;
+  const input = document.createElement("input");
+  input.type = "text";
+  input.value = (get(path) || []).join(", ");
+  input.addEventListener("change", () => {
+    const parts = input.value.split(",").map((s) => s.trim()).filter(Boolean);
+    const nums = parts.every((p) => /^-?\d+$/.test(p));
+    put(path, nums ? parts.map(Number) : parts);
+  });
+  wrap.appendChild(input);
+  return wrap;
+}
+
+function numberField(label, path, hint) {
+  const wrap = document.createElement("div");
+  wrap.className = "field";
+  wrap.innerHTML = `<span>${label} <em style="opacity:.7">${hint || path}</em></span>`;
+  const input = document.createElement("input");
+  input.type = "number"; input.step = "0.5"; input.min = "0";
+  input.value = get(path);
+  input.addEventListener("change", () => put(path, Number(input.value)));
+  wrap.appendChild(input);
+  return wrap;
+}
+
+function renderSwitches() {
+  const box = $("switches");
+  box.innerHTML = "";
+  box.append(
+    boolSwitch("Merge events sharing a time and room", "merge_parallel_rooms"),
+    boolSwitch("Delete events once they are past", "retention.prune_past"),
+    boolSwitch("Remind before a registration window closes",
+               "scrape.registration_close_reminder"),
+    numberField("Placeholder threshold (hours)", "placeholder_min_hours"),
+    listField("Lecture reminders (minutes before)", "reminders.lecture_minutes_before"),
+    listField("Exam reminders (minutes before)", "reminders.exam_minutes_before"),
+    listField("Registration reminders", "reminders.registration_minutes_before"),
+    listField("Registration kinds to remind about", "scrape.registration_kinds"),
+    listField("Dropped if the title contains", "exclude_keywords"),
+    listField("Extra course filters (title fragments)", "courses",
+              "courses — numbers are the checkboxes above"),
+  );
+}
+
+function renderDiff(data) {
+  const scope = $("diffScope");
+  const plan = data && (data.vs_head || data.vs_file);
+  scope.textContent = data && data.vs_head
+    ? "vs the committed settings (what the cloud does not know yet)"
+    : "vs the file on disk";
+
+  if (!plan) { $("counts").innerHTML = ""; $("changes").innerHTML =
+      `<div class="empty">working it out…</div>`; return; }
+
+  const c = plan.counts;
+  $("counts").innerHTML =
+    `<span class="c-add">+${c.created} new</span>` +
+    `<span class="c-del">−${c.deleted} gone</span>` +
+    `<span class="c-mod">~${c.updated} changed</span>` +
+    `<span style="color:var(--dim)">${c.unchanged} untouched</span>`;
+
+  if (!plan.changes.length) {
+    $("changes").innerHTML = `<div class="empty">Nothing would change.</div>`;
+    return;
+  }
+  const marks = {created: "+", deleted: "−", updated: "~"};
+  $("changes").innerHTML = plan.changes.map((ch) => `
+    <div class="chg ${ch.kind}" title="${ch.id}">
+      <span class="mark">${marks[ch.kind]}</span>
+      <span class="when">${fmtWhen(ch.start)}</span>
+      <span class="what">${escapeHtml(ch.title)}${
+        ch.location ? ` <span style="opacity:.6">· ${escapeHtml(ch.location)}</span>` : ""}</span>
+      <span class="fields">${ch.fields.join(", ")}</span>
+    </div>`).join("") + (plan.truncated
+      ? `<div class="empty">…more changes than are worth listing</div>` : "");
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"]/g, (c) =>
+    ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+}
+
+function renderGit() {
+  const g = state.git;
+  const box = $("git");
+  if (!g.available) { box.innerHTML = `<span class="meta">not a git working copy</span>`; return; }
+
+  const dirty = g.changed.includes(state.file);
+  const bits = [
+    `<span class="meta">branch ${g.branch} · last ${escapeHtml(g.last_commit)}</span>`,
+  ];
+  if (dirty) bits.push(
+    `<div class="warn" style="margin-top:8px"><span class="dot off"></span>` +
+    `${state.file} is modified but not committed — the daily sync in the cloud still runs ` +
+    `the committed version.</div>`);
+  else if (g.ahead > 0) bits.push(
+    `<div class="warn" style="margin-top:8px"><span class="dot off"></span>` +
+    `${g.ahead} commit${g.ahead > 1 ? "s" : ""} not pushed — the cloud pulls from the remote.</div>`);
+  else bits.push(
+    `<div style="margin-top:8px"><span class="dot on"></span>` +
+    `<span class="meta">the cloud is running what you see here</span></div>`);
+
+  box.innerHTML = bits.join("");
+
+  if (dirty || g.ahead > 0) {
+    const row = document.createElement("div");
+    row.style.cssText = "display:flex;gap:10px;margin-top:11px;align-items:center";
+    const msg = document.createElement("input");
+    msg.type = "text";
+    msg.value = dirty ? `Update ${state.file}` : "";
+    msg.placeholder = "commit message";
+    msg.style.maxWidth = "420px";
+    msg.disabled = !dirty;
+    const btn = document.createElement("button");
+    btn.textContent = dirty ? "Commit and push" : "Push";
+    btn.addEventListener("click", async () => {
+      btn.disabled = true; btn.textContent = "working…";
+      try {
+        const out = await call("/api/commit", {message: msg.value, push: true});
+        $("gitlog").style.display = "block";
+        $("gitlog").textContent = out.output;
+        state.git = out.git;
+        if (!out.ok) showError(`git ${out.failed_at} failed — see the log below.`);
+        else showError("");
+        renderGit();
+      } catch (e) { showError(e.message); btn.disabled = false; btn.textContent = "Commit and push"; }
+    });
+    row.append(msg, btn);
+    box.appendChild(row);
+  }
+}
+
+function changed() {
+  const dirty = !eq(draft, state.settings);
+  $("dirty").innerHTML = dirty
+    ? `<span class="dot off"></span>unsaved edits in this page`
+    : `<span class="dot on"></span>no unsaved edits`;
+  $("save").disabled = !dirty;
+  $("discard").disabled = !dirty;
+  renderCourses();            // checkboxes can change which rows look active
+  clearTimeout(diffTimer);
+  diffTimer = setTimeout(refreshDiff, 180);
+}
+
+async function refreshDiff() {
+  try {
+    renderDiff(await call("/api/diff", {settings: draft}));
+    showError("");
+  } catch (e) { showError(e.message); }
+}
+
+function renderAll() {
+  renderHeader(); renderCourses(); renderSwitches(); renderGit(); changed();
+}
+
+// ---- actions ---------------------------------------------------------------
+async function load() {
+  state = await call("/api/state");
+  draft = clone(state.settings);
+  renderAll();
+}
+
+$("save").addEventListener("click", async () => {
+  $("save").disabled = true;
+  try {
+    const out = await call("/api/save", {settings: draft, mtime: state.mtime});
+    state = out.state;
+    draft = clone(state.settings);
+    renderAll();
+    const names = Object.keys(out.changed);
+    showError("");
+    $("notice").insertAdjacentHTML("afterbegin",
+      `<div class="warn">Written to ${state.file}: ${names.join(", ") || "nothing"}.</div>`);
+  } catch (e) {
+    showError(e.message + (e.data && e.data.reload ? "" : ""));
+    $("save").disabled = false;
+  }
+});
+
+$("discard").addEventListener("click", () => { draft = clone(state.settings); renderAll(); });
+
+$("refresh").addEventListener("click", async () => {
+  const btn = $("refresh");
+  btn.disabled = true; btn.textContent = "fetching…";
+  try { state = await call("/api/refresh", {}); draft = clone(state.settings); renderAll(); showError(""); }
+  catch (e) { showError(e.message); }
+  finally { btn.disabled = false; btn.textContent = "Refresh data"; }
+});
+
+load().catch((e) => showError("Could not load: " + e.message));
+</script>
+</body>
+</html>

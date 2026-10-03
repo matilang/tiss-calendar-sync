@@ -28,6 +28,7 @@ from __future__ import annotations
 import os
 import tomllib
 from dataclasses import fields, is_dataclass
+from datetime import date
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -55,6 +56,22 @@ def _plain(value: Any) -> Any:
     if isinstance(value, Mapping):
         return {k: _plain(v) for k, v in value.items()}
     return value
+
+
+def as_dict(settings: Settings) -> dict[str, Any]:
+    """Settings in the shape the TOML file has, minus the secrets, JSON-safe.
+
+    Round-trips: from_dict(as_dict(s)) == s for everything except the two secret fields,
+    which is what lets the interface send settings to a browser and get them back without
+    either side knowing the schema.
+    """
+    out = {k: v for k, v in _plain(settings).items() if k not in SECRET_FIELDS}
+    for section in out.values():
+        if isinstance(section, dict):
+            for key, value in section.items():
+                if isinstance(value, date):
+                    section[key] = value.isoformat()
+    return out
 
 
 def differences(text: str, new: Settings) -> dict[str, tuple[Any, Any]]:

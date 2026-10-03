@@ -7,6 +7,9 @@ the commands you already use working unchanged.
   python tiss_sync.py preview   # show what would be synced, nothing is written
   python tiss_sync.py export    # write a cleaned .ics file (import it manually)
   python tiss_sync.py sync      # create/update/delete events in Google Calendar
+  python tiss_sync.py ui        # local page: edit the settings, see the effect first
+
+  python tiss_sync.py preview --diff   # what your uncommitted settings edits would change
 
 Equivalent to `python -m tisscal.cli`. Kept as a file because the scheduled task, the
 GitHub Actions workflow and sync_daily.cmd all invoke it by name, and because the names

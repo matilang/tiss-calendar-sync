@@ -31,3 +31,6 @@ deleted_untagged_backup.json
 # --- scratch ---------------------------------------------------------------
 wftest/
 cloud_test_baseline.json
+
+# --- interface cache: fetched feeds and course pages, never worth committing ---
+.cache/

@@ -81,6 +81,7 @@ import — but then there are no automatic updates.
 ## Commands
 
 ```bash
+python tiss_sync.py ui                     # the local interface (opens a browser)
 python tiss_sync.py list|preview|export|sync [-c settings.toml]
 python tiss_sync.py preview --diff         # what your uncommitted settings edits change
 python tiss_sync.py preview --diff other.toml   # ...or against another settings file
@@ -94,6 +95,32 @@ python -m pytest                           # no network needed (pip install -r r
 `tiss_sync.py` is a thin entry point; the code lives in `tisscal/`
 and the same commands work as `python -m tisscal.cli` and `python -m tisscal.scrape`.
 
+## The interface
+
+`python tiss_sync.py ui` opens a local page for changing the settings and seeing what the
+change would do before it is written.
+
+| | |
+|---|---|
+| **Courses** | every course in your TISS feed, including the ones **not** in `settings.toml` - a course you have just been admitted to appears there first, and this is where you notice. Per course: sync it, scrape its exam dates, hide its exercise slots, and what it is called on the calendar. |
+| **What gets synced** | the switches that are not per course - reminders, pruning, the placeholder threshold, which registration windows to be reminded about. Each shows the option name it writes, so the page teaches the file rather than hiding it. |
+| **What this would change** | the point of the whole thing: the events that would appear, disappear or come out different, worked out by running the pipeline twice and comparing what would be sent to Google. Compared against the **committed** settings, because that is what the daily sync runs. |
+| **Git** | whether the file is committed and pushed. A saved file is not yet a changed calendar; the cloud pulls from the remote. One button closes the gap. |
+
+Nothing is written until *Apply*, which goes through the same writer as everything else:
+comments in `settings.toml` survive, and the file is validated before it replaces the
+original. If you also edited the file in an editor meanwhile, the save is refused rather
+than silently overwriting it.
+
+The server listens on **127.0.0.1 only** and has no authentication, which is fine because
+nothing else can reach it - and the reason not to move it off localhost without adding some.
+The page is never sent the feed URL or the calendar id, only whether they are set: a browser
+tab is a place secrets leak from.
+
+The feed and the course pages are cached in `.cache/` so a click costs no HTTP requests;
+*Refresh data* is the only thing that refetches, which makes staleness visible instead of
+accidental.
+
 ## Where the code is
 
 | module | what is in it |
@@ -105,6 +132,9 @@ and the same commands work as `python -m tisscal.cli` and `python -m tisscal.scr
 | `tisscal/pipeline.py` | **the rules**: filtering, placeholders, exercises, merging, titles, pruning |
 | `tisscal/plan.py` | what a settings change would add, remove or alter - no Google calls |
 | `tisscal/settings_io.py` | writing `settings.toml` back in place, comments intact |
+| `tisscal/cache.py` | the feed and the TISS course pages on disk, so a click is cheap |
+| `tisscal/vcs.py` | the little bit of git the interface needs |
+| `tisscal/web.py` | the local interface: one page and six endpoints |
 | `tisscal/scrape.py` | reading exam dates and registration windows off a TISS course page |
 | `tisscal/events.py` | turning scraped course data into calendar events |
 | `tisscal/gcal.py` | Google Calendar: event bodies, retries, the sync |

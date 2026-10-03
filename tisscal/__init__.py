@@ -15,6 +15,9 @@ Where things live:
     pipeline.py  the order all of the above applies in - start here
     plan.py      what a settings change would do, worked out before anything is sent
     settings_io.py  writing settings.toml back without losing its comments
+    cache.py     the feed and the course pages on disk, so clicking is cheap
+    vcs.py       the little bit of git the interface needs to tell the truth
+    web.py       the local interface: one page, and six endpoints over the above
     gcal.py      the Google Calendar side: event bodies, retries, the sync itself
     cli.py       list / preview / export / sync
 
