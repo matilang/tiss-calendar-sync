@@ -82,11 +82,13 @@ import — but then there are no automatic updates.
 
 ```bash
 python tiss_sync.py list|preview|export|sync [-c settings.toml]
+python tiss_sync.py preview --diff         # what your uncommitted settings edits change
+python tiss_sync.py preview --diff other.toml   # ...or against another settings file
 python -m tisscal.scrape 186814 194187     # exam dates, registration windows, group hours
 python -m tisscal.scrape 186814 --json
 python tools/cleanup_imported.py [--apply] # remove events imported into the calendar by hand
 python check_cloud_run.py --canary         # prove a GitHub Actions run reached the calendar
-python -m pytest                           # 79 tests, no network (pip install -r requirements-dev.txt)
+python -m pytest                           # no network needed (pip install -r requirements-dev.txt)
 ```
 
 `tiss_sync.py` is a thin entry point; the code lives in `tisscal/`
@@ -101,6 +103,7 @@ and the same commands work as `python -m tisscal.cli` and `python -m tisscal.scr
 | `tisscal/secrets.py` | where the iCal URL and calendar ID come from, separately |
 | `tisscal/feed.py` | fetching and parsing an iCal feed |
 | `tisscal/pipeline.py` | **the rules**: filtering, placeholders, exercises, merging, titles, pruning |
+| `tisscal/plan.py` | what a settings change would add, remove or alter - no Google calls |
 | `tisscal/scrape.py` | reading exam dates and registration windows off a TISS course page |
 | `tisscal/events.py` | turning scraped course data into calendar events |
 | `tisscal/gcal.py` | Google Calendar: event bodies, retries, the sync |

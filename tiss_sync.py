@@ -26,10 +26,12 @@ from tisscal.filters import (drop_placeholders, filter_events, hide_exercises,
                              matches_course, prune_past)
 from tisscal.merge import merge_parallel
 from tisscal.pipeline import build_events
+from tisscal.plan import Change, Plan, compare, diff, event_bodies
 from tisscal.titles import course_label, display_title
 
 __all__ = [
-    "COURSE_NR", "ConfigError", "Exercises", "Lecture", "RETRY_STATUS", "Reminders",
+    "COURSE_NR", "Change", "ConfigError", "Exercises", "Lecture", "Plan", "RETRY_STATUS",
+    "Reminders", "compare", "diff", "event_bodies",
     "Retention", "Scrape", "Semester", "Settings", "THROTTLE_REASONS", "build_events",
     "TYPE_CODES", "UID_TIMESTAMP", "VIENNA", "_execute", "_gcal_body", "cmd_export",
     "cmd_list", "cmd_preview", "cmd_sync", "course_label", "display_title",

@@ -9,11 +9,12 @@ from pathlib import Path
 from icalendar import Calendar, Event
 
 from .classify import is_exam
-from .config import Settings, load_config
+from .config import ConfigError, Settings, from_dict, load_config
 from .feed import fetch_feed, parse_feed
 from .gcal import cmd_sync
 from .model import Lecture
 from .pipeline import build_events
+from .plan import compare
 from .titles import display_title
 
 
@@ -67,13 +68,54 @@ def cmd_export(events: list[Lecture], out: Path) -> None:
 
 
 # --------------------------------------------------------------------------- #
+def _diff_settings(ref: str, cfg_path: Path) -> Settings:
+    """The settings to compare against: another .toml file, or a git revision of this one.
+
+    Defaults to HEAD because of how this project runs: the daily sync uses the settings as
+    committed, so "what do my uncommitted edits do?" is the question that matters, and it
+    needs no second file to answer.
+
+    Parsed without resolving secrets. A diff never fetches anything, so the feed URL and
+    calendar id are irrelevant here - and requiring them would make `--diff HEAD` fail on
+    a file that quite correctly does not contain them.
+    """
+    import subprocess
+    import tomllib
+
+    path = Path(ref)
+    if path.suffix == ".toml":
+        if not path.exists():
+            raise SystemExit(f"No such settings file: {ref}")
+        text, profile = path.read_text(encoding="utf-8"), path.stem
+    else:
+        done = subprocess.run(["git", "show", f"{ref}:{cfg_path.name}"],
+                              cwd=cfg_path.parent, capture_output=True,
+                              text=True, encoding="utf-8")
+        if done.returncode != 0:
+            raise SystemExit(f"Cannot read {cfg_path.name} at {ref}: "
+                             f"{done.stderr.strip() or 'not a git working copy?'}")
+        text, profile = done.stdout, cfg_path.stem
+
+    try:
+        return from_dict(tomllib.loads(text), profile=profile)
+    except (ConfigError, tomllib.TOMLDecodeError) as e:
+        raise SystemExit(f"{ref}: {e}")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("command", choices=["list", "preview", "export", "sync"])
     ap.add_argument("-c", "--config", default="settings.toml",
                     help="settings file; secrets come from .secrets.toml or the environment")
     ap.add_argument("-o", "--out", default="tiss_clean.ics", help="output file for `export`")
+    ap.add_argument("--diff", nargs="?", const="HEAD", metavar="REF",
+                    help="preview only: show what the current settings change compared "
+                         "with REF - a git revision of the same file (default HEAD) or "
+                         "another .toml file")
     args = ap.parse_args()
+
+    if args.diff and args.command != "preview":
+        ap.error("--diff only applies to `preview`")
 
     # The project directory, not the package directory: settings.toml, .secrets.toml
     # and service_account.json all live next to the repository root.
@@ -83,13 +125,20 @@ def main() -> None:
     # settings own separate events and neither can delete the other's.
     settings = load_config(cfg_path)
 
-    events = parse_feed(fetch_feed(settings.ical_url))
+    raw = parse_feed(fetch_feed(settings.ical_url))
 
     if args.command == "list":
-        cmd_list(events)  # unfiltered on purpose, so you see everything
+        cmd_list(raw)  # unfiltered on purpose, so you see everything
         return
 
-    events = build_events(events, settings)
+    if args.diff:
+        other = _diff_settings(args.diff, cfg_path)
+        print(f"{args.diff}  ->  {cfg_path.name} (working copy)\n")
+        # The committed version is "before": these are the changes your edits introduce.
+        print(compare(raw, other, settings).report())
+        return
+
+    events = build_events(raw, settings)
 
     if args.command == "preview":
         cmd_preview(events, settings)

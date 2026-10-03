@@ -16,6 +16,12 @@ moves the number, and a change in anything else does not.
     python tools/fingerprint.py --json out.json      # also dump the bodies, to diff
 
 Needs the network: the point is the real feed, not a fixture. tests/ cover the fixture.
+
+One caveat, learned the hard way: this number is **not** stable across days. Scraped
+registration events are filtered against the current time and `prune_past` drops events as
+they pass, so the fingerprint moves on its own at a day boundary with nothing having
+changed. Comparing before and after a refactor therefore means running both within the same
+few minutes - across two days the comparison means nothing.
 """
 from __future__ import annotations
 

@@ -13,6 +13,7 @@ Where things live:
     scrape.py    reading exam dates and registration windows off a TISS course page
     events.py    turning scraped course data into calendar events
     pipeline.py  the order all of the above applies in - start here
+    plan.py      what a settings change would do, worked out before anything is sent
     gcal.py      the Google Calendar side: event bodies, retries, the sync itself
     cli.py       list / preview / export / sync
 
