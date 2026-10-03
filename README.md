@@ -104,6 +104,7 @@ and the same commands work as `python -m tisscal.cli` and `python -m tisscal.scr
 | `tisscal/feed.py` | fetching and parsing an iCal feed |
 | `tisscal/pipeline.py` | **the rules**: filtering, placeholders, exercises, merging, titles, pruning |
 | `tisscal/plan.py` | what a settings change would add, remove or alter - no Google calls |
+| `tisscal/settings_io.py` | writing `settings.toml` back in place, comments intact |
 | `tisscal/scrape.py` | reading exam dates and registration windows off a TISS course page |
 | `tisscal/events.py` | turning scraped course data into calendar events |
 | `tisscal/gcal.py` | Google Calendar: event bodies, retries, the sync |

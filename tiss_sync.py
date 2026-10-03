@@ -27,10 +27,15 @@ from tisscal.filters import (drop_placeholders, filter_events, hide_exercises,
 from tisscal.merge import merge_parallel
 from tisscal.pipeline import build_events
 from tisscal.plan import Change, Plan, compare, diff, event_bodies
+from tisscal.settings_io import WriteError
+from tisscal.settings_io import apply as apply_settings
+from tisscal.settings_io import differences as settings_differences
+from tisscal.settings_io import write as write_settings
 from tisscal.titles import course_label, display_title
 
 __all__ = [
     "COURSE_NR", "Change", "ConfigError", "Exercises", "Lecture", "Plan", "RETRY_STATUS",
+    "WriteError", "apply_settings", "settings_differences", "write_settings",
     "Reminders", "compare", "diff", "event_bodies",
     "Retention", "Scrape", "Semester", "Settings", "THROTTLE_REASONS", "build_events",
     "TYPE_CODES", "UID_TIMESTAMP", "VIENNA", "_execute", "_gcal_body", "cmd_export",
