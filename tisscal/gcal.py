@@ -8,7 +8,7 @@ from pathlib import Path
 from time import sleep
 
 from .model import VIENNA, Lecture
-from .classify import is_exam
+from .classify import is_exam, is_exercise
 from .config import Settings
 from .titles import display_title
 
@@ -30,7 +30,10 @@ def _gcal_body(ev: Lecture, settings: Settings) -> dict:
         color = rem.exam_color_id
     else:
         minutes = rem.lecture_minutes_before
-        color = None
+        # An exercise keeps the lecture's reminders - it is a slot you attend - but gets its
+        # own colour, because the point of telling it apart is telling it apart at a glance.
+        color = (settings.exercises.color_id
+                 if is_exercise(ev, settings.exercises) else None)
 
     title = display_title(ev, settings.titles, settings.exercises)
 

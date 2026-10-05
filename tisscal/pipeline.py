@@ -14,10 +14,14 @@ Three of these positions are load-bearing, and tests/test_build.py fails if they
                             merged late they become one event listing every room, and
                             unmerged the shared id silently drops four of them
 
-Two positions are conventional rather than required, and saying otherwise would be
-untrue: `exercises` could run after scraping, because hide_exercises only touches
-kind == "lecture" and so can never reach a registration reminder; and `prune` could run
-before scraping, because events.py already refuses to emit a window that has closed.
+One position is conventional rather than required, and saying otherwise would be untrue:
+`prune` could run before scraping, because events.py already refuses to emit a
+registration window that has closed.
+
+There used to be a fourth step here, hiding the exercise slots of courses you had no group
+in. It was removed: `drop_placeholders` already deals with the real case, because before
+registration TISS publishes the whole ten-hour span the groups run in, and dropping
+anything that long needs no per-course list to maintain.
 
 tools/check_ordering.py reorders the steps one at a time and reports which moves the
 tests actually catch - worth re-running after adding a step, since a comment claiming an
@@ -27,7 +31,7 @@ from __future__ import annotations
 
 from .config import Settings
 from .events import scraped_events
-from .filters import drop_placeholders, filter_events, hide_exercises, prune_past
+from .filters import drop_placeholders, filter_events, prune_past
 from .merge import merge_parallel
 from .model import Lecture
 
@@ -40,7 +44,6 @@ def build_events(raw: list[Lecture], settings: Settings, scraper=None) -> list[L
     events = filter_events(raw, settings.semester, settings.courses,
                            settings.exclude_keywords)
     events = drop_placeholders(events, settings.placeholder_min_hours)
-    events = hide_exercises(events, settings.exercises)
 
     if settings.scrape.courses:
         events += scraped_events(settings.scrape, settings.titles, scraper=scraper)

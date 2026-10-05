@@ -9,8 +9,22 @@ depends on is visible from the signature.
 """
 from __future__ import annotations
 
+import re
+
 from .config import Exercises, Reminders
 from .model import Lecture
+
+# Once you are registered for an exercise group, TISS stops describing the slot and starts
+# naming it after the group and the hour instead:
+#
+#     194.187 Advanced Software Engineering 3_11:00-12:00
+#                                           ^ group 3, the 11:00 slot
+#
+# The word "exercise" appears nowhere in that, which is exactly why keywords alone let a
+# registered exercise through as a lecture - it reached the calendar as "VU ASE" among the
+# lectures, with nothing to tell them apart. The 10-hour "Exercise sessions" blocks TISS
+# publishes *before* registration do say so, and are matched by keyword as before.
+GROUP_SLOT = re.compile(r"\b\d+_\d{1,2}:\d{2}\s*-\s*\d{1,2}:\d{2}")
 
 
 def is_exercise(ev: Lecture, exercises: Exercises) -> bool:
@@ -21,7 +35,11 @@ def is_exercise(ev: Lecture, exercises: Exercises) -> bool:
     Q&A sessions - those are not exercises and should keep the lecture treatment.
     """
     hay = f"{ev.summary} {ev.description}".lower()
-    return any(w.lower() in hay for w in exercises.keywords)
+    if any(w.lower() in hay for w in exercises.keywords):
+        return True
+    # The description only: the summary is the course title, which every event of the
+    # course carries, so matching there would make the whole course look like exercises.
+    return bool(GROUP_SLOT.search(ev.description or ""))
 
 
 def is_exam(ev: Lecture, reminders: Reminders) -> bool:

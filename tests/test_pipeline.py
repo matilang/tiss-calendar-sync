@@ -70,41 +70,6 @@ class TestPlaceholders:
         assert len(T.drop_placeholders([make_event(description="Exercise", hours=3.9)], 4)) == 1
 
 
-class TestHideExercises:
-    def test_nothing_hidden_when_list_is_empty(self, events, cfg):
-        assert len(T.hide_exercises(events, cfg.exercises)) == len(events)
-
-    def test_hides_only_the_listed_course(self, events, cfg):
-        c = shift(cfg, exercises={"hide_for": ["186.814"]})
-        kept = T.hide_exercises(events, c.exercises)
-        assert not [e for e in kept
-                    if e.course_nr == "186.814" and "Exercises" in e.description]
-        assert [e for e in kept if e.course_nr == "194.187"]
-
-    def test_qa_sessions_are_not_exercises(self, events, cfg):
-        """Q&A is not an exercise and must keep the ordinary lecture treatment."""
-        c = shift(cfg, exercises={"hide_for": ["186.814"]})
-        kept = {e.description for e in T.hide_exercises(events, c.exercises)}
-        assert "Algorithmics Q&A" in kept
-        assert "Q & A 2" in kept
-
-    def test_lectures_of_a_hidden_course_stay(self, events, cfg):
-        c = shift(cfg, exercises={"hide_for": ["186.814"]})
-        kept = T.hide_exercises(events, c.exercises)
-        assert [e for e in kept if e.course_nr == "186.814" and e.description == "Lecture"]
-
-    def test_warns_when_hiding_a_short_slot(self, cfg, capsys):
-        """After registering, your own 1 h slot matches too - it must not vanish quietly."""
-        c = shift(cfg, exercises={"hide_for": ["186.814"]})
-        T.hide_exercises([make_event(description="Exercise Group 7", hours=1)], c.exercises)
-        assert "WARNING" in capsys.readouterr().err
-
-    def test_silent_for_a_plenary_block(self, cfg, capsys):
-        c = shift(cfg, exercises={"hide_for": ["186.814"]})
-        T.hide_exercises([make_event(description="Algorithmics Exercises 1-3", hours=2)], c.exercises)
-        assert "WARNING" not in capsys.readouterr().err
-
-
 class TestMergeParallel:
     def test_same_slot_in_two_rooms_becomes_one_event(self, events, cfg):
         gen_ai = [e for e in events if "Generative AI" in e.summary]

@@ -163,7 +163,7 @@ class TestInterface:
 
     def test_a_draft_change_shows_up_as_a_difference(self, interface):
         draft = interface.state()["settings"]
-        draft["exercises"]["hide_for"] = ["186.814"]
+        draft["courses"] = ["186.814"]
         payload = interface.diff({"settings": draft})
         assert payload["vs_file"]["counts"]["deleted"] > 0
 
@@ -188,7 +188,7 @@ class TestInterface:
         before = sum(1 for l in text.splitlines() if l.strip().startswith("#"))
         state = interface.state()
         draft = state["settings"]
-        draft["exercises"]["hide_for"] = ["186.814"]
+        draft["exercises"]["color_id"] = "3"
         interface.save({"settings": draft, "mtime": state["mtime"]})
         after = sum(1 for l in interface.path.read_text(encoding="utf-8").splitlines()
                     if l.strip().startswith("#"))
@@ -295,3 +295,39 @@ class TestHttp:
         assert code == 200
         counts = json.loads(diff_body)["vs_file"]["counts"]
         assert (counts["created"], counts["deleted"], counts["updated"]) == (0, 0, 0)
+
+
+class TestAnUnloadableCommittedFile:
+    """Removing a config option makes every revision before the removal unparseable, and
+    the loader is strict on purpose. That must cost the historical comparison only.
+
+    This is not hypothetical: dropping `exercises.hide_for` made /api/diff return 400 and
+    show the page no diff at all, and it would have healed itself on the next commit -
+    the kind of bug that comes back the next time the schema changes.
+    """
+
+    def head_cannot_load(self, interface, monkeypatch):
+        from tisscal import web
+
+        monkeypatch.setattr(web.vcs, "file_at",
+                            lambda root, name, ref: 'courses = []\n[exercises]\ngone = 1\n')
+
+    def test_the_live_diff_still_comes_back(self, interface, monkeypatch):
+        self.head_cannot_load(interface, monkeypatch)
+        out = interface.diff({"settings": interface.state()["settings"]})
+        assert "vs_file" in out
+        assert out["vs_file"]["counts"]["unchanged"] > 0
+
+    def test_it_says_why_the_comparison_is_missing(self, interface, monkeypatch):
+        self.head_cannot_load(interface, monkeypatch)
+        out = interface.diff({"settings": interface.state()["settings"]})
+        assert "vs_head" not in out
+        assert "no longer loads" in out["vs_head_error"]
+        assert "gone" in out["vs_head_error"]
+
+    def test_over_http_it_is_a_200_not_a_400(self, server, interface, monkeypatch):
+        self.head_cannot_load(interface, monkeypatch)
+        code, body = fetch(server + "/api/diff",
+                           {"settings": as_dict(interface.settings())})
+        assert code == 200
+        assert "vs_head_error" in json.loads(body)

@@ -25,8 +25,8 @@ from tisscal.feed import fetch_feed, parse_feed
 from tisscal.gcal import (RETRY_STATUS, THROTTLE_REASONS, _execute, _gcal_body, cmd_sync)
 from tisscal.model import COURSE_NR, TYPE_CODES, UID_TIMESTAMP, VIENNA, Lecture
 from tisscal.classify import is_exam, is_exercise
-from tisscal.filters import (drop_placeholders, filter_events, hide_exercises,
-                             matches_course, prune_past)
+from tisscal.filters import (drop_placeholders, filter_events, matches_course,
+                             prune_past)
 from tisscal.merge import merge_parallel
 from tisscal.pipeline import build_events
 from tisscal.plan import Change, Plan, compare, diff, event_bodies
@@ -43,7 +43,7 @@ __all__ = [
     "Retention", "Scrape", "Semester", "Settings", "THROTTLE_REASONS", "build_events",
     "TYPE_CODES", "UID_TIMESTAMP", "VIENNA", "_execute", "_gcal_body", "cmd_export",
     "cmd_list", "cmd_preview", "cmd_sync", "course_label", "display_title",
-    "drop_placeholders", "fetch_feed", "filter_events", "hide_exercises", "is_exam",
+    "drop_placeholders", "fetch_feed", "filter_events", "is_exam",
     "is_exercise", "load_config", "main", "matches_course", "merge_parallel",
     "parse_feed", "prune_past", "scraped_events",
 ]

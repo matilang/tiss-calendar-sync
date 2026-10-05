@@ -61,21 +61,31 @@ keep_past_kinds = ["exam"]
 keep_past_keywords = ["Exercise", "Q&A", "Q & A", "Test", "Prüfung"]
 
 [exercises]
-# Courses where you have not picked an exercise group yet. Their exercise slots are
-# hidden, so the only thing left for them is the reminder to go and register.
+# Telling exercise slots apart from lectures, and showing them differently.
 #
-# Empty: 186.814's "Algorithmics Exercises 1-3" turned out to be plenary blocks where
-# the exercises are explained to everyone, not group slots - confirmed 2026-10-02.
-# ASE is out too: its pre-registration blocks are already dropped by
-# placeholder_min_hours, and leaving it here would hide your real slot once you join
-# a group.
-hide_for = []
-# What counts as an exercise. Q&A sessions deliberately do not match: they are not
-# exercises and keep the ordinary lecture treatment.
+# Two things have to be recognised, and only one of them says "exercise" anywhere.
+# Before you register, TISS publishes the whole span the groups run in and calls it
+# "Exercise sessions" - those are matched by the keywords below, and dropped anyway by
+# placeholder_min_hours because they run ten hours. Once you are registered, the slot
+# that appears is named after the group and the hour instead:
+#
+#     194.187 Advanced Software Engineering 3_11:00-12:00
+#
+# No keyword can catch that, so classify.py also matches that shape. This is what was
+# wrong until 2026-10-05: the registered slot reached the calendar as "VU ASE", sitting
+# among the lectures with nothing to distinguish it.
+#
+# What counts as an exercise by keyword. Q&A sessions deliberately do not match: they are
+# not exercises and keep the ordinary lecture treatment.
 keywords = ["Exercise", "Übung", "Uebung"]
 # An exercise slot of a VU is still an Übung, so the leading type code is swapped:
-# "VU Algorithmics" -> "UE Algorithmics". Set to "" to leave titles alone.
+# "VU ASE" -> "UE ASE". The course stays the same course - only the type changes, because
+# that is the part that differs. Set to "" to leave titles alone.
 type_code = "UE"
+# Google colour 7, Peacock. Distinct from the exam red, the registration banana and the
+# TUWEL tangerine, so one glance at the week separates exercises from lectures.
+# Set to "" for no colour.
+color_id = "7"
 
 [titles]
 # Calendar titles, keyed by course number. The number itself never appears in the

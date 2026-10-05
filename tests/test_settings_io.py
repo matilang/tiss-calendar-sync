@@ -60,7 +60,7 @@ class TestNothingToWrite:
 class TestCommentsSurvive:
     def test_every_comment_line_survives_an_edit(self, tmp_path):
         text = (ROOT / "settings.toml").read_text(encoding="utf-8")
-        new = shift(load(ROOT / "settings.toml"), exercises={"hide_for": ["186.814"]},
+        new = shift(load(ROOT / "settings.toml"), exercises={"color_id": "3"},
                     courses=["194.187", "186.814"])
         out = apply(text, new)
         lost = set(comments(text)) - set(comments(out))
@@ -159,9 +159,9 @@ class TestTheTomlTrap:
         path = tmp_path / "s.toml"
         path.write_text('courses = ["186.814"]\n', encoding="utf-8")
         out = apply(path.read_text(encoding="utf-8"),
-                    shift(load(path), exercises={"hide_for": ["186.814"]}))
+                    shift(load(path), exercises={"keywords": ["Exercise"]}))
         raw = tomllib.loads(out)
-        assert raw["exercises"]["hide_for"] == ["186.814"]
+        assert raw["exercises"]["keywords"] == ["Exercise"]
         assert raw["courses"] == ["186.814"]
 
 
@@ -199,9 +199,9 @@ class TestWritingToDisk:
     def test_it_reports_what_changed(self, tmp_path):
         path = tmp_path / "settings.toml"
         path.write_bytes((ROOT / "settings.toml").read_bytes())
-        changed = write(path, shift(load(path), exercises={"hide_for": ["186.814"]},
+        changed = write(path, shift(load(path), exercises={"color_id": "3"},
                                     merge_parallel_rooms=False))
-        assert changed["exercises.hide_for"] == ([], ["186.814"])
+        assert changed["exercises.color_id"] == ("7", "3")
         assert changed["merge_parallel_rooms"] == (True, False)
 
     def test_no_temporary_file_is_left_behind(self, tmp_path):
@@ -214,8 +214,8 @@ class TestWritingToDisk:
         """The round trip that matters in practice: save, reload, get what you asked for."""
         path = tmp_path / "settings.toml"
         path.write_bytes((ROOT / "settings.toml").read_bytes())
-        write(path, shift(load(path), exercises={"hide_for": ["186.814"]}))
-        assert load(path).exercises.hide_for == ("186.814",)
+        write(path, shift(load(path), exercises={"color_id": "3"}))
+        assert load(path).exercises.color_id == "3"
 
 
 def load_text(text: str):

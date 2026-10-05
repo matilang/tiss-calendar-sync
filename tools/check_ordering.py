@@ -27,7 +27,6 @@ STEPS = {
     "filter": ("    events = filter_events(raw, settings.semester, settings.courses,\n"
                "                           settings.exclude_keywords)\n"),
     "placeholders": "    events = drop_placeholders(events, settings.placeholder_min_hours)\n",
-    "exercises": "    events = hide_exercises(events, settings.exercises)\n",
     "scrape": ("    if settings.scrape.courses:\n"
                "        events += scraped_events(settings.scrape, settings.titles,"
                " scraper=scraper)\n"),
@@ -36,19 +35,13 @@ STEPS = {
     "prune": "    events = prune_past(events, settings.retention)\n",
 }
 
-ORDER = ["filter", "placeholders", "exercises", "scrape", "merge", "prune"]
+ORDER = ["filter", "placeholders", "scrape", "merge", "prune"]
 
 MUTATIONS = {
-    "exercises after scrape": ["filter", "placeholders", "scrape", "exercises", "merge",
-                               "prune"],
-    "scrape before filter": ["scrape", "filter", "placeholders", "exercises", "merge",
-                             "prune"],
-    "placeholders after scrape": ["filter", "exercises", "scrape", "placeholders",
-                                  "merge", "prune"],
-    "prune before scrape": ["filter", "placeholders", "exercises", "prune", "scrape",
-                            "merge"],
-    "merge before scrape": ["filter", "placeholders", "exercises", "merge", "scrape",
-                            "prune"],
+    "scrape before filter": ["scrape", "filter", "placeholders", "merge", "prune"],
+    "placeholders after scrape": ["filter", "scrape", "placeholders", "merge", "prune"],
+    "prune before scrape": ["filter", "placeholders", "prune", "scrape", "merge"],
+    "merge before scrape": ["filter", "placeholders", "merge", "scrape", "prune"],
 }
 
 TAIL = ("    return sorted({e.gcal_id: e for e in events}.values(), "

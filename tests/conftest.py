@@ -56,8 +56,8 @@ def cfg():
         "tiss": {"ical_url": "https://example.invalid/feed.ics"},
         "titles": {"186.814": "VU Algorithmics", "194.187": "VU ASE",
                    "192.161": "VU MoGD"},
-        "exercises": {"hide_for": [], "keywords": ["Exercise", "Übung"],
-                      "type_code": "UE"},
+        "exercises": {"keywords": ["Exercise", "Übung"], "type_code": "UE",
+                      "color_id": "7"},
         "retention": {"prune_past": False, "keep_past_kinds": ["exam"],
                       "keep_past_keywords": ["Exercise", "Q&A", "Q & A"]},
         "scrape": {"courses": []},
@@ -92,7 +92,7 @@ def shift(settings, **changes):
     """Settings with some sections changed, without mutating the fixture.
 
     A section given as a dict is merged into the existing one, so a test can override a
-    single option: shift(cfg, exercises={"hide_for": ["186.814"]}).
+    single option: shift(cfg, exercises={"type_code": "UE"}).
     """
     import dataclasses
 

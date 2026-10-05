@@ -40,10 +40,10 @@ class TestDefaults:
     def test_section_values_reach_their_dataclass(self):
         s = from_dict({"tiss": {"ical_url": "https://example.invalid/f.ics"},
                        "google": {"calendar_id": "x@group.calendar.google.com"},
-                       "exercises": {"hide_for": ["186.814"]}})
+                       "exercises": {"keywords": ["Exercise"]}})
         assert s.ical_url == "https://example.invalid/f.ics"
         assert s.calendar_id == "x@group.calendar.google.com"
-        assert s.exercises.hide_for == ("186.814",)
+        assert s.exercises.keywords == ("Exercise",)
 
     def test_the_tag_comes_from_the_profile(self):
         """Each profile must own separate events on one calendar."""

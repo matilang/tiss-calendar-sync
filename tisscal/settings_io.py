@@ -1,7 +1,7 @@
 """Writing settings back to the file without throwing away what it explains.
 
 Most of settings.toml is comments, and they are the reason the file is worth having in git:
-why placeholder_min_hours is 4, why hide_for is empty, why the profile must not be renamed.
+why placeholder_min_hours is 4, why a colour was picked, why the profile must not change.
 A writer that regenerated the file from a Settings object would produce a correct file and
 destroy all of that - which is a bad trade, so this edits the document in place with
 tomlkit and leaves everything it does not need to touch exactly as it was.

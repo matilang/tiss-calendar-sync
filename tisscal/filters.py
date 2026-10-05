@@ -1,11 +1,9 @@
 """Which events belong on the calendar at all."""
 from __future__ import annotations
 
-import sys
-from datetime import datetime, time, timedelta
+from datetime import datetime, time
 
-from .classify import is_exercise
-from .config import Exercises, Retention, Semester
+from .config import Retention, Semester
 from .model import VIENNA, Lecture
 
 
@@ -70,43 +68,6 @@ def drop_placeholders(events: list[Lecture], min_hours: float) -> list[Lecture]:
             if (ev.end - ev.start).total_seconds() / 3600 >= min_hours:
                 continue
         kept.append(ev)
-    return kept
-
-
-def hide_exercises(events: list[Lecture], exercises: Exercises) -> list[Lecture]:
-    """Drop exercise slots for courses where you have not picked a group yet.
-
-    Listed per course on purpose. TISS mixes two different things under "exercise":
-    186.814's "Algorithmics Exercises 1-3" is a two-hour plenary session in a lecture
-    hall, while the actual group slots are one hour in a seminar room and only reach the
-    feed once you register. Which of those you want to see before registering is a
-    judgement call per course, not something to guess from the data.
-
-    Remove the course number from `hide_for` once you are in a group.
-    """
-    hidden = {str(c) for c in exercises.hide_for}
-    if not hidden:
-        return events
-
-    kept, dropped = [], []
-    for ev in events:
-        if ev.course_nr in hidden and ev.kind == "lecture" and is_exercise(ev, exercises):
-            dropped.append(ev)
-        else:
-            kept.append(ev)
-
-    # A plenary exercise session runs 2 h in a lecture hall; a personal group slot is
-    # about an hour. Hiding something that short probably means registration came
-    # through and this list is now costing you your own slot - say so loudly, because
-    # silently missing it is exactly the failure this feature invites.
-    for ev in dropped:
-        if isinstance(ev.end, datetime) and (ev.end - ev.start) <= timedelta(minutes=90):
-            print(f"  WARNING: hiding a short exercise slot for {ev.course_nr} "
-                  f"({ev.start_dt:%a %d.%m %H:%M}, {(ev.end - ev.start).seconds // 60} min)."
-                  f"\n           That looks like your own group slot - if you are "
-                  f"registered now,\n           remove {ev.course_nr!r} from "
-                  f"[exercises].hide_for to see it.", file=sys.stderr)
-            break
     return kept
 
 

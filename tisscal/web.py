@@ -171,10 +171,19 @@ class Interface:
         raw, scraper = self.feed(), self.scraper()
         out = {"vs_file": plan_json(compare(raw, self.settings(), proposed,
                                             scraper=scraper))}
+
         committed = vcs.file_at(self.root, self.path.name, "HEAD")
         if committed is not None:
-            head = from_dict(tomllib.loads(committed), profile=proposed.profile)
-            out["vs_head"] = plan_json(compare(raw, head, proposed, scraper=scraper))
+            # Best effort, and deliberately so. The committed file was written against
+            # whatever the config schema was then, and the loader is strict: remove an
+            # option and every revision before the removal stops parsing. That must cost
+            # the historical comparison only - failing the whole request would leave the
+            # page with no diff at all, over a revision nobody is editing.
+            try:
+                head = from_dict(tomllib.loads(committed), profile=proposed.profile)
+                out["vs_head"] = plan_json(compare(raw, head, proposed, scraper=scraper))
+            except (ConfigError, tomllib.TOMLDecodeError) as e:
+                out["vs_head_error"] = f"the committed {self.path.name} no longer loads: {e}"
         return out
 
     def save(self, payload: dict) -> dict:

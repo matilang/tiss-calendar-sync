@@ -49,23 +49,29 @@ def test_merging_can_be_switched_off(events, cfg):
     assert len([e for e in out if "Generative AI" in e.summary]) == 2
 
 
-def test_registration_reminders_survive_exercise_hiding(events, cfg, course_html):
-    """While you wait for a group, the reminder to register is the one thing you want -
-    and "Exercise group registration opens" matches the exercise keywords.
+def test_a_group_registration_reminder_is_not_mistaken_for_an_exercise(events, cfg,
+                                                                      course_html):
+    """"Exercise group registration opens: VU Algorithmics" matches the exercise keywords,
+    but it is a reminder to go and sign up, not a slot to attend. If it were treated as an
+    exercise it would be retitled UE and painted the exercise colour, which would make the
+    one event telling you to act look like an ordinary class.
 
-    What protects it is hide_exercises only touching kind == "lecture", not the step
-    order: tools/check_ordering.py confirms moving this step past the scrape changes
-    nothing. It lives outside TestOrdering for that reason.
+    What protects it is kind: both the title swap and the colour only apply to
+    kind == "lecture", and a scraped reminder is kind == "registration".
     """
+    from tisscal.gcal import _gcal_body
+
     course = sc.parse_course(course_html, "186814", "2026W")
-    c = shift(cfg,
-              exercises={"hide_for": ["186.814"]},
-              scrape={"courses": ["186814"], "semester": "2026W",
-                      "registration_kinds": ["group"],
-                      "registration_close_reminder": True})
-    out = build(events, c, course)
-    assert not [e for e in out if e.kind == "lecture" and "Exercises" in e.description]
-    assert [e for e in out if e.kind == "registration" and e.scope == "group"]
+    c = shift(cfg, scrape={"courses": ["186814"], "semester": "2026W",
+                           "registration_kinds": ["group"],
+                           "registration_close_reminder": True})
+    reminders = [e for e in build(events, c, course)
+                 if e.kind == "registration" and e.scope == "group"]
+    assert reminders, "the fixture course should produce a group registration reminder"
+    for ev in reminders:
+        body = _gcal_body(ev, c)
+        assert not body["summary"].startswith("UE ")
+        assert body["colorId"] == c.reminders.registration_color_id
 
 
 def test_no_closed_registration_window_reaches_the_calendar(events, cfg, course_html):

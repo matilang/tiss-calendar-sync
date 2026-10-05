@@ -111,3 +111,75 @@ class TestGcalBody:
     def test_all_day_event_uses_a_plain_date(self, cfg):
         body = T._gcal_body(make_event(all_day=True, description=""), cfg)
         assert "date" in body["start"] and "dateTime" not in body["start"]
+
+
+class TestARegisteredExerciseGroup:
+    """The case that was wrong on the calendar until 2026-10-05.
+
+    Once you are registered, TISS names the slot after the group and the hour rather than
+    describing it: "194.187 Advanced Software Engineering 3_11:00-12:00". No exercise
+    keyword appears in that, so the first exercise this project ever saw for real reached
+    the calendar titled "VU ASE", indistinguishable from the lectures beside it.
+
+    The description below is copied from the live feed, not invented.
+    """
+
+    REAL = "194.187 Advanced Software Engineering 3_11:00-12:00"
+
+    def slot(self, description=REAL, hours=1.0, **kw):
+        return make_event(course_nr="194.187",
+                          summary="194.187 VU Advanced Software Engineering",
+                          description=description, hours=hours, **kw)
+
+    def test_it_is_recognised_as_an_exercise(self, cfg):
+        assert T.is_exercise(self.slot(), cfg.exercises)
+
+    def test_the_type_code_becomes_ue_and_the_course_stays(self, cfg):
+        """A VU is a lecture course that also has exercises, so the course does not change -
+        only the type code, which is the part that differs."""
+        assert T.display_title(self.slot(), cfg.titles, cfg.exercises) == "UE ASE"
+
+    def test_it_gets_the_exercise_colour(self, cfg):
+        body = T._gcal_body(self.slot(), cfg)
+        assert body["colorId"] == cfg.exercises.color_id
+
+    def test_it_keeps_the_lecture_reminders(self, cfg):
+        """It is a class you attend, not a deadline: the exam reminder schedule would be
+        three days of warning for a weekly hour."""
+        body = T._gcal_body(self.slot(), cfg)
+        minutes = [r["minutes"] for r in body["reminders"]["overrides"]]
+        assert minutes == list(cfg.reminders.lecture_minutes_before)
+
+    def test_a_plain_lecture_of_the_same_course_is_untouched(self, cfg):
+        lecture = self.slot(description="Lecture", hours=2)
+        assert not T.is_exercise(lecture, cfg.exercises)
+        assert T.display_title(lecture, cfg.titles, cfg.exercises) == "VU ASE"
+        assert "colorId" not in T._gcal_body(lecture, cfg)
+
+    def test_the_pattern_is_matched_on_the_description_only(self, cfg):
+        """The summary is the course title, carried by every event of the course. Matching
+        there would turn a whole course into exercises."""
+        ev = make_event(course_nr="194.187", summary=f"194.187 VU ASE {self.REAL}",
+                        description="Lecture")
+        assert not T.is_exercise(ev, cfg.exercises)
+
+    def test_the_keyword_path_still_works(self, cfg):
+        """The pre-registration blocks do say "Exercise sessions", and 186.814's plenary
+        sessions say "Algorithmics Exercises 4". Neither should regress."""
+        assert T.is_exercise(make_event(description="Exercise sessions"), cfg.exercises)
+        assert T.is_exercise(make_event(description="Algorithmics Exercises 4"), cfg.exercises)
+
+    def test_a_qa_session_is_still_not_an_exercise(self, cfg):
+        for desc in ("Algorithmics Q&A", "Q & A 2"):
+            ev = make_event(description=desc)
+            assert not T.is_exercise(ev, cfg.exercises)
+            assert "colorId" not in T._gcal_body(ev, cfg)
+
+    def test_the_colour_can_be_switched_off(self, cfg):
+        c = shift(cfg, exercises={"color_id": ""})
+        assert "colorId" not in T._gcal_body(self.slot(), c)
+
+    def test_the_title_swap_can_be_switched_off_independently(self, cfg):
+        c = shift(cfg, exercises={"type_code": ""})
+        assert T.display_title(self.slot(), c.titles, c.exercises) == "VU ASE"
+        assert T._gcal_body(self.slot(), c)["colorId"] == c.exercises.color_id

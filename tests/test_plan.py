@@ -109,11 +109,23 @@ class TestAgainstTheRealPipeline:
         assert not plan.created and not plan.deleted
         assert all(c.fields == ("summary",) for c in plan.updated)
 
-    def test_hiding_exercises_deletes_exactly_the_exercise_slots(self, events, cfg):
-        plan = compare(events, cfg, shift(cfg, exercises={"hide_for": ["186.814"]}))
-        assert plan.deleted
-        assert not plan.created
-        assert all("Algorithmics" in c.before["summary"] for c in plan.deleted)
+    def test_turning_off_the_placeholder_rule_creates_events(self, events, cfg):
+        """The pre-registration blocks come back - the one case where loosening a setting
+        adds events instead of removing them.
+
+        The two ten-hour blocks arrive as one event, because they are the same slot in two
+        rooms and the merge step folds them together. They also come back as "UE ..." in
+        the exercise colour, which is the rest of the pipeline agreeing that a block called
+        "Exercise sessions" is an exercise.
+        """
+        plan = compare(events, cfg, shift(cfg, placeholder_min_hours=0))
+        assert len(plan.created) == 1
+        assert not plan.deleted and not plan.updated
+        restored = plan.created[0].after
+        assert "Exercise sessions" in restored["description"]
+        assert "2 parallel rooms" in restored["description"]
+        assert restored["summary"].startswith("UE ")
+        assert restored["colorId"] == cfg.exercises.color_id
 
     def test_changing_reminders_touches_only_that_field(self, events, cfg):
         plan = compare(events, cfg,

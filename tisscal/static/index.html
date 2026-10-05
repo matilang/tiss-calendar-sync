@@ -130,7 +130,6 @@
     <thead><tr>
       <th class="mid" title="Keep this course's events on the calendar">Sync</th>
       <th class="mid" title="Read this course's TISS page for exam dates and registration windows">Scrape</th>
-      <th class="mid" title="Hide its exercise slots until you have a group">Hide&nbsp;UE</th>
       <th>Course</th><th>Calendar name</th>
       <th class="num" title="Events this course has in the TISS iCal feed">Feed</th>
       <th class="num" title="Events it would have on the calendar. Can exceed the feed count: exams and registration reminders are read off the course page, not the feed.">Calendar</th>
@@ -164,6 +163,10 @@
 
 <script>
 "use strict";
+
+// The entry in `courses` that keeps the TISS holiday and break markers. They carry no
+// course number, so they are matched by this fragment of their title.
+const HOLIDAY_FILTER = "no lectures";
 
 let state = null;      // as the server last reported it
 let draft = null;      // what the page has, before Apply
@@ -249,39 +252,33 @@ function renderCourses() {
   for (const c of state.courses) {
     const nr = c.course_nr;
     const tr = document.createElement("tr");
-    const synced = inList("courses", nr) || (nr === "" ? false : false);
-    const configured = nr ? inList("courses", nr) : c.in_config;
+    // The holiday markers have no course number, so they are kept by a title fragment
+    // instead. Same checkbox, different entry - there is no reason to make the one row you
+    // cannot tick the one row you have to type for.
+    const filter = nr || HOLIDAY_FILTER;
+    const configured = inList("courses", filter);
     if (!configured) tr.classList.add("off");
     if (!c.in_config && nr) tr.classList.add("new-course");
 
     // Sync
     const sync = document.createElement("td"); sync.className = "mid";
-    if (nr) {
-      sync.appendChild(checkbox(configured, (on) => toggleList("courses", nr, on)));
-    } else {
-      sync.innerHTML = `<span class="meta" title="Kept by a title fragment in courses, not by number">—</span>`;
-    }
+    sync.appendChild(checkbox(configured, (on) => toggleList("courses", filter, on)));
     tr.appendChild(sync);
 
-    // Scrape
+    // Scrape - only courses with a number have a TISS page to read
     const scr = document.createElement("td"); scr.className = "mid";
-    const bare = nr.replace(".", "");
     if (nr) {
+      const bare = nr.replace(".", "");
       scr.appendChild(checkbox(inList("scrape.courses", bare),
         (on) => toggleList("scrape.courses", bare, on)));
-    } else { scr.textContent = ""; }
+    }
     tr.appendChild(scr);
 
-    // Hide exercises
-    const hide = document.createElement("td"); hide.className = "mid";
-    if (nr) {
-      hide.appendChild(checkbox(inList("exercises.hide_for", nr),
-        (on) => toggleList("exercises.hide_for", nr, on)));
-    } else { hide.textContent = ""; }
-    tr.appendChild(hide);
-
     const name = document.createElement("td");
-    name.innerHTML = `<span class="nr">${c.key}</span>`;
+    name.innerHTML = nr
+      ? `<span class="nr">${nr}</span>`
+      : `<span class="nr" title="Kept by the title fragment ${HOLIDAY_FILTER}">` +
+        `holidays</span>`;
     tr.appendChild(name);
 
     const label = document.createElement("td");
@@ -372,9 +369,19 @@ function renderSwitches() {
     listField("Registration reminders", "reminders.registration_minutes_before"),
     listField("Registration kinds to remind about", "scrape.registration_kinds"),
     listField("Dropped if the title contains", "exclude_keywords"),
-    listField("Extra course filters (title fragments)", "courses",
-              "courses — numbers are the checkboxes above"),
   );
+
+  // Everything in `courses` is a checkbox in the table above, except anything that is
+  // neither a course number from the feed nor the holiday fragment. That should normally be
+  // empty; if it is not, it still has to be editable, so the field appears only then.
+  const known = new Set(state.courses.map((c) => c.course_nr).filter(Boolean));
+  known.add(HOLIDAY_FILTER);
+  const leftovers = (get("courses") || []).filter((c) => !known.has(c));
+  if (leftovers.length) {
+    box.appendChild(listField(
+      "Course filters with no row above", "courses",
+      `courses — ${leftovers.join(", ")}`));
+  }
 }
 
 function renderDiff(data) {
@@ -383,6 +390,13 @@ function renderDiff(data) {
   scope.textContent = data && data.vs_head
     ? "vs the committed settings (what the cloud does not know yet)"
     : "vs the file on disk";
+  // A settings file from before an option was renamed or removed no longer loads. That
+  // costs the historical comparison and nothing else, so say so rather than show nothing.
+  if (data && data.vs_head_error) {
+    scope.textContent = "vs the file on disk";
+    scope.title = data.vs_head_error;
+    scope.textContent += " — " + data.vs_head_error.slice(0, 72);
+  }
 
   if (!plan) { $("counts").innerHTML = ""; $("changes").innerHTML =
       `<div class="empty">working it out…</div>`; return; }

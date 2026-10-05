@@ -44,12 +44,24 @@ class Semester:
 
 @dataclass(frozen=True)
 class Exercises:
-    # Courses whose exercise slots are hidden until you have picked a group.
-    hide_for: tuple[str, ...] = ()
-    # What counts as an exercise. Q&A deliberately does not match.
+    """How exercise slots are told apart from lectures, and shown differently.
+
+    There used to be a `hide_for` list here, naming courses whose exercise slots should be
+    suppressed until you had a group. It turned out to be solving a problem
+    `placeholder_min_hours` already solves better: before registration TISS publishes the
+    whole span the groups run in - ten hours, once per room - and dropping anything that
+    long removes it without anyone maintaining a list. The one course it was tried on
+    turned out to hold plenary sessions rather than group slots, so the list was empty in
+    practice and has been removed.
+    """
+    # What counts as an exercise. Q&A deliberately does not match. See classify.py for the
+    # other half: a slot booked for your group says so in a format no keyword can catch.
     keywords: tuple[str, ...] = ("Exercise", "Übung", "Uebung")
     # An exercise of a VU is still an Übung: "VU Algorithmics" -> "UE Algorithmics".
     type_code: str = "UE"
+    # Google colour 7, Peacock. Distinct from the exam red, the registration banana and the
+    # TUWEL tangerine, so a glance at the week tells lectures from exercises. "" to disable.
+    color_id: str = "7"
 
 
 @dataclass(frozen=True)

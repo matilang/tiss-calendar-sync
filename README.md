@@ -102,7 +102,7 @@ change would do before it is written.
 
 | | |
 |---|---|
-| **Courses** | every course in your TISS feed, including the ones **not** in `settings.toml` - a course you have just been admitted to appears there first, and this is where you notice. Per course: sync it, scrape its exam dates, hide its exercise slots, and what it is called on the calendar. |
+| **Courses** | every course in your TISS feed, including the ones **not** in `settings.toml` - a course you have just been admitted to appears there first, and this is where you notice. Per course: sync it, scrape its exam dates, and what it is called on the calendar. |
 | **What gets synced** | the switches that are not per course - reminders, pruning, the placeholder threshold, which registration windows to be reminded about. Each shows the option name it writes, so the page teaches the file rather than hiding it. |
 | **What this would change** | the point of the whole thing: the events that would appear, disappear or come out different, worked out by running the pipeline twice and comparing what would be sent to Google. Compared against the **committed** settings, because that is what the daily sync runs. |
 | **Git** | whether the file is committed and pushed. A saved file is not yet a changed calendar; the cloud pulls from the remote. One button closes the gap. |
@@ -129,7 +129,7 @@ accidental.
 | `tisscal/config.py` | reading `settings.toml`, defaulting every option |
 | `tisscal/secrets.py` | where the iCal URL and calendar ID come from, separately |
 | `tisscal/feed.py` | fetching and parsing an iCal feed |
-| `tisscal/pipeline.py` | **the rules**: filtering, placeholders, exercises, merging, titles, pruning |
+| `tisscal/pipeline.py` | **the rules**: filtering, placeholders, scraping, merging, pruning |
 | `tisscal/plan.py` | what a settings change would add, remove or alter - no Google calls |
 | `tisscal/settings_io.py` | writing `settings.toml` back in place, comments intact |
 | `tisscal/cache.py` | the feed and the TISS course pages on disk, so a click is cheap |
@@ -154,6 +154,22 @@ the whole span the groups run in — often once per room, e.g. Friday 09:00–19
 although your slot will be one hour in one room. Any timed event at least
 `placeholder_min_hours` long (default 4; real lectures run 1–2 h) is skipped. Once you
 register, TISS emits your actual slot and the next sync picks it up.
+
+**Exercises are retitled and coloured.** A VU is a lecture course that also has exercises,
+so the course does not change — only the type code: `VU ASE` → `UE ASE`, plus the colour
+from `[exercises] color_id`. Spotting an exercise takes two tries, because TISS describes
+the slot only until you are registered for a group, after which it names it after the group
+and the hour instead:
+
+```
+before registering:  Exercise sessions                              (10 h, once per room)
+after registering:   194.187 Advanced Software Engineering 3_11:00-12:00   (your hour)
+```
+
+The first is matched by `[exercises] keywords`, the second by its shape — see
+`tisscal/classify.py`. Until this was noticed, a registered exercise arrived on the calendar
+titled `VU ASE`, with nothing to tell it from the lectures around it. Q&A sessions
+deliberately stay lectures.
 
 **Past events are pruned, selectively.** With `[retention] prune_past = true`, lectures
 and expired reminders are removed once they are over, while exams and exercise sessions
