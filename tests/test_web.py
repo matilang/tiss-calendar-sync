@@ -331,3 +331,46 @@ class TestAnUnloadableCommittedFile:
                            {"settings": as_dict(interface.settings())})
         assert code == 200
         assert "vs_head_error" in json.loads(body)
+
+
+class TestAStaleServer:
+    """A server left running from before a code change reads the current settings file with
+    the modules it imported at startup. That is unavoidable in a long-lived process; what is
+    avoidable is the error saying nothing about it.
+
+    Exactly what happened once: exercises.color_id was added to config.py and settings.toml
+    together, and a server from before refused the file with "unknown option
+    [exercises].'color_id'" - correct, and no help at all.
+    """
+
+    def test_an_error_normally_stands_alone(self, server, interface):
+        code, body = fetch(server + "/api/diff", {"settings": {"nonsense": 1}})
+        assert code == 400
+        message = json.loads(body)["error"]
+        assert "nonsense" in message
+        assert "restart" not in message
+
+    def test_a_changed_module_is_named_as_the_likely_cause(self, server, monkeypatch):
+        from tisscal import web
+
+        monkeypatch.setattr(web, "stale_modules", lambda: ["config.py"])
+        code, body = fetch(server + "/api/diff", {"settings": {"nonsense": 1}})
+        assert code == 400
+        message = json.loads(body)["error"]
+        assert "nonsense" in message, "the real error still comes first"
+        assert "config.py changed since" in message
+        assert "restart it" in message
+
+    def test_it_detects_a_file_newer_than_the_process(self, monkeypatch):
+        from tisscal import web
+
+        monkeypatch.setattr(web, "STARTED", 0.0)   # as if started at the epoch
+        assert "config.py" in web.stale_modules()
+
+    def test_nothing_is_stale_for_a_server_started_now(self, monkeypatch):
+        import time
+
+        from tisscal import web
+
+        monkeypatch.setattr(web, "STARTED", time.time() + 60)
+        assert web.stale_modules() == []

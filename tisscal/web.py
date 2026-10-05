@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import json
 import threading
+import time
 import tomllib
 import traceback
 import webbrowser
@@ -41,7 +42,23 @@ from .settings_io import WriteError, as_dict
 from .settings_io import write as write_settings
 from .titles import course_label
 
-STATIC = Path(__file__).resolve().parent / "static"
+PACKAGE = Path(__file__).resolve().parent
+STATIC = PACKAGE / "static"
+
+# When this process loaded its code. A long-lived server keeps the modules it imported at
+# startup while reading settings.toml fresh on every request, so editing the code and the
+# settings together leaves the two disagreeing - and the error says nothing about why.
+STARTED = time.time()
+
+
+def stale_modules() -> list[str]:
+    """Package files that changed after this process imported them.
+
+    The failure this exists for: `exercises.color_id` was added to both config.py and
+    settings.toml, and a server left running from before refused to load the file with
+    "unknown option [exercises].'color_id'" - correct, and no help at all.
+    """
+    return sorted(p.name for p in PACKAGE.glob("*.py") if p.stat().st_mtime > STARTED)
 
 
 # --------------------------------------------------------------------------- #
@@ -250,6 +267,18 @@ class Handler(BaseHTTPRequestHandler):
             return {}
         return json.loads(self.rfile.read(length).decode("utf-8"))
 
+    @staticmethod
+    def _with_staleness(message: str) -> str:
+        """Add the likely cause when this server predates the code it is running against."""
+        changed = stale_modules()
+        if not changed:
+            return message
+        started = datetime.fromtimestamp(STARTED).strftime("%d.%m %H:%M")
+        return (f"{message}\n\nThis server started at {started}, and "
+                f"{', '.join(changed)} changed since. It is still running the older code "
+                f"while reading the current settings file - restart it (Ctrl-C, then "
+                f"`python tiss_sync.py ui`) and this probably goes away.")
+
     def _run(self, fn, *args) -> None:
         """Turn every failure into something the page can show.
 
@@ -261,9 +290,9 @@ class Handler(BaseHTTPRequestHandler):
         except Conflict as e:
             self._json({"error": str(e), "reload": True}, 409)
         except (ConfigError, WriteError, KeyError) as e:
-            self._json({"error": str(e)}, 400)
+            self._json({"error": self._with_staleness(str(e))}, 400)
         except SystemExit as e:        # load_config exits on a bad file
-            self._json({"error": str(e)}, 400)
+            self._json({"error": self._with_staleness(str(e))}, 400)
         except Exception as e:
             traceback.print_exc()
             self._json({"error": f"{type(e).__name__}: {e}"}, 500)
