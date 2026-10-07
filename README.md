@@ -11,6 +11,13 @@ it does that every morning without your laptop being on.
 You pick what gets synced on a local page that shows you the month before and after your
 change, so nothing reaches the calendar that you have not seen first.
 
+![The interface: a month of the calendar with the effect of ticking one more course drawn
+over it — new events outlined in green, and a strip of months saying how many fall in
+each](docs/interface.png)
+
+*Ticking one course here would add 31 events. The grid says where they land before anything
+is written.*
+
 Python 3.11 or newer.
 
 ## What ends up on the calendar

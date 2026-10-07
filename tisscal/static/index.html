@@ -103,7 +103,10 @@
   .months button { font-family: var(--mono); font-size: 12px; padding: 3px 8px;
                    border-color: transparent; }
   .months button.on { border-color: var(--accent); color: var(--accent); font-weight: 650; }
-  .months button .n { font-size: 10.5px; padding-left: 4px; font-weight: 700; }
+  .months button .yr { opacity: .45; padding-left: 2px; font-size: 10.5px; }
+  .months button .n { font-size: 10px; font-weight: 700; margin-left: 5px;
+                      padding: 0 5px; border-radius: 7px; vertical-align: 1px;
+                      background: color-mix(in srgb, var(--mod) 30%, transparent); }
   .legend { display: flex; gap: 11px; font-size: 11.5px; color: var(--dim); }
   .legend .key::before { content: ""; display: inline-block; width: 9px; height: 9px;
                          border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
@@ -509,7 +512,10 @@ function monthsOf(rows) {
 
 function monthName(key) {
   const [y, m] = key.split("-").map(Number);
-  return new Date(y, m - 1, 1).toLocaleString(undefined, {month: "short", year: "2-digit"});
+  const name = new Date(y, m - 1, 1).toLocaleString(undefined, {month: "short"});
+  // The year is dimmed rather than dropped: a semester spans a new year, and "sty" next to
+  // "paź" without one is ambiguous exactly when it matters.
+  return `${name}<span class="yr">${String(y).slice(2)}</span>`;
 }
 
 function chipHtml(r) {
