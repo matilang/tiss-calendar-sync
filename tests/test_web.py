@@ -374,3 +374,52 @@ class TestAStaleServer:
 
         monkeypatch.setattr(web, "STARTED", time.time() + 60)
         assert web.stale_modules() == []
+
+
+class TestWhatTheGridIsDrawnFrom:
+    """The month grid needs the whole calendar, not only the difference - a grid showing
+    seven added chips in an otherwise empty October would say nothing about where they land.
+
+    Every row is built from the Google request body, so the grid shows the title, colour and
+    times that would actually be sent. One source, no second opinion to drift from it.
+    """
+
+    def test_state_carries_every_event(self, interface):
+        state = interface.state()
+        assert len(state["calendar"]) == state["events"]
+
+    def test_a_row_says_what_a_grid_needs(self, interface):
+        row = interface.state()["calendar"][0]
+        assert set(row) == {"id", "title", "location", "colour", "start", "end", "all_day"}
+        assert row["start"] and row["title"]
+
+    def test_a_timed_event_is_not_all_day(self, interface):
+        timed = [r for r in interface.state()["calendar"] if not r["all_day"]]
+        assert timed
+        assert all("T" in r["start"] for r in timed)
+
+    def test_an_all_day_event_carries_a_bare_date(self, interface):
+        """The holiday markers. A grid that read them as midnight would put them in the
+        wrong cell for anyone east of Vienna."""
+        whole = [r for r in interface.state()["calendar"] if r["all_day"]]
+        assert whole
+        assert all(len(r["start"]) == 10 for r in whole)
+
+    def test_the_exercise_colour_reaches_the_row(self, interface):
+        """What the grid is for: exercises must be visibly not lectures."""
+        colours = {r["colour"] for r in interface.state()["calendar"]}
+        assert interface.settings().exercises.color_id in colours
+        assert None in colours, "lectures keep the calendar's own colour"
+
+    def test_event_row_and_the_diff_agree_on_shape(self, interface):
+        """The page builds rows out of the before/after bodies in a diff, using the same
+        fields. If the two shapes diverged, an added event would draw differently from an
+        existing one - which is exactly what the grid is there to compare."""
+        from tisscal.web import event_row
+
+        draft = interface.state()["settings"]
+        draft["courses"] = ["186.814"]
+        changes = interface.diff({"settings": draft})["vs_file"]["changes"]
+        assert changes
+        body = changes[0]["before"] or changes[0]["after"]
+        assert set(event_row("x", body)) == set(interface.state()["calendar"][0])

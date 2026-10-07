@@ -95,6 +95,57 @@
   .chg .fields { color: var(--dim); font-size: 11.5px; }
   .empty { padding: 20px 16px; color: var(--dim); }
 
+  /* ---- month grid ---- */
+  .viewbar { display: flex; align-items: center; gap: 8px; padding: 9px 12px;
+             border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  .viewbar button { padding: 3px 9px; font-size: 12.5px; }
+  .months { display: flex; gap: 3px; flex-wrap: wrap; }
+  .months button { font-family: var(--mono); font-size: 12px; padding: 3px 8px;
+                   border-color: transparent; }
+  .months button.on { border-color: var(--accent); color: var(--accent); font-weight: 650; }
+  .months button .n { font-size: 10.5px; padding-left: 4px; font-weight: 700; }
+  .legend { display: flex; gap: 11px; font-size: 11.5px; color: var(--dim); }
+  .legend .key::before { content: ""; display: inline-block; width: 9px; height: 9px;
+                         border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+  .legend .created::before { background: var(--add); }
+  .legend .deleted::before { background: var(--del); }
+  .legend .updated::before { background: var(--mod); }
+
+  .grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
+  .grid .dow { font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em;
+               color: var(--dim); text-align: center; padding: 6px 0;
+               border-bottom: 1px solid var(--line); font-weight: 650; }
+  .day { min-height: 86px; padding: 4px 5px 6px; border-right: 1px solid var(--line);
+         border-bottom: 1px solid var(--line); display: flex; flex-direction: column;
+         gap: 3px; min-width: 0; }
+  .day:nth-child(7n + 7) { border-right: 0; }
+  .day.outside { background: color-mix(in srgb, var(--ink) 3%, transparent); }
+  .day.outside .dnum { opacity: .35; }
+  .day.weekend .dnum { color: var(--dim); }
+  .dnum { font-family: var(--mono); font-size: 11.5px; color: var(--dim);
+          font-variant-numeric: tabular-nums; }
+  .day.today .dnum { background: var(--accent); color: #fff; border-radius: 3px;
+                     padding: 0 4px; align-self: flex-start; font-weight: 700; }
+
+  .chip { font-size: 11px; line-height: 1.35; padding: 2px 5px; border-radius: 3px;
+          border-left: 3px solid var(--chip, var(--dim));
+          background: color-mix(in srgb, var(--chip, var(--dim)) 14%, transparent);
+          overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: default; }
+  .chip .t { font-family: var(--mono); opacity: .75; padding-right: 3px; }
+  .chip.created { box-shadow: inset 0 0 0 1.5px var(--add); }
+  .chip.updated { box-shadow: inset 0 0 0 1.5px var(--mod); }
+  .chip.deleted { opacity: .5; text-decoration: line-through;
+                  box-shadow: inset 0 0 0 1.5px var(--del); }
+  .chip .mk { font-weight: 800; padding-right: 2px; }
+  .chip.created .mk { color: var(--add); }
+  .chip.updated .mk { color: var(--mod); }
+  .chip.deleted .mk { color: var(--del); }
+
+  @media (max-width: 760px) {
+    .grid { grid-template-columns: repeat(7, minmax(0, 1fr)); font-size: 10px; }
+    .day { min-height: 60px; }
+  }
+
   /* ---- bottom bar ---- */
   .bar { position: fixed; left: 0; right: 0; bottom: 0; background: var(--panel);
          border-top: 1px solid var(--line); padding: 10px 20px;
@@ -141,10 +192,24 @@
   <h2>What gets synced</h2>
   <div class="panel"><div class="switches" id="switches"></div></div>
 
-  <h2>What this would change <span id="diffScope" class="meta"></span></h2>
+  <h2>Your calendar, and what your edits would do to it
+      <span id="diffScope" class="meta"></span></h2>
   <div class="panel">
     <div class="counts" id="counts"></div>
-    <div class="changes" id="changes"></div>
+    <div class="viewbar">
+      <button id="prevMonth" title="Previous month">◀</button>
+      <div class="months" id="months"></div>
+      <button id="nextMonth" title="Next month">▶</button>
+      <span class="grow"></span>
+      <span class="legend">
+        <span class="key created">added</span>
+        <span class="key deleted">removed</span>
+        <span class="key updated">changed</span>
+      </span>
+      <button id="viewToggle" title="Switch between the month grid and a flat list">As a list</button>
+    </div>
+    <div id="grid" class="grid"></div>
+    <div class="changes" id="changes" hidden></div>
   </div>
 
   <h2>Git</h2>
@@ -384,44 +449,192 @@ function renderSwitches() {
   }
 }
 
-function renderDiff(data) {
-  const scope = $("diffScope");
-  const plan = data && (data.vs_head || data.vs_file);
-  scope.textContent = data && data.vs_head
-    ? "vs the committed settings (what the cloud does not know yet)"
-    : "vs the file on disk";
-  // A settings file from before an option was renamed or removed no longer loads. That
-  // costs the historical comparison and nothing else, so say so rather than show nothing.
-  if (data && data.vs_head_error) {
-    scope.textContent = "vs the file on disk";
-    scope.title = data.vs_head_error;
-    scope.textContent += " — " + data.vs_head_error.slice(0, 72);
+// Google's own palette, so a chip here is the colour the event has in Google Calendar.
+const GOOGLE_COLOURS = {
+  "1": "#7986cb", "2": "#33b679", "3": "#8e24aa", "4": "#e67c73", "5": "#f6bf26",
+  "6": "#f4511e", "7": "#039be5", "8": "#616161", "9": "#3f51b5", "10": "#0b8043",
+  "11": "#d50000",
+};
+const NO_COLOUR = "#5b7fa6";          // a lecture: the calendar's own default
+const MARKS = {created: "+", deleted: "−", updated: "~"};
+
+let lastDiff = null;        // the diff the board is drawn from
+let shownMonth = null;      // "YYYY-MM"
+let asList = false;
+
+const pad = (n) => String(n).padStart(2, "0");
+const dayOf = (iso) => (iso || "").slice(0, 10);
+const monthOf = (iso) => (iso || "").slice(0, 7);
+const keyOfDate = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+
+// The mirror of web.event_row, so an added event is drawn exactly like an existing one.
+function rowFromBody(id, body) {
+  const s = (body && body.start) || {}, e = (body && body.end) || {};
+  return {
+    id, title: (body && body.summary) || "", location: (body && body.location) || "",
+    colour: (body && body.colorId) || null,
+    start: s.dateTime || s.date || "", end: e.dateTime || e.date || "",
+    all_day: "date" in s,
+  };
+}
+
+/** The calendar as it is, with this draft's changes laid over it.
+ *
+ * The baseline is the settings file on disk - what you would get by not touching anything -
+ * and the overlay is vs_file, which is what Apply would do. Those two have to be the same
+ * question or the grid would be drawing one state and marking up another. */
+function boardRows() {
+  const rows = new Map();
+  for (const e of state.calendar || []) rows.set(e.id, {...e, diff: "same"});
+  const plan = lastDiff && lastDiff.vs_file;
+  for (const ch of (plan ? plan.changes : [])) {
+    const body = ch.kind === "deleted" ? ch.before : ch.after;
+    rows.set(ch.id, {...rowFromBody(ch.id, body), diff: ch.kind, fields: ch.fields});
+  }
+  return [...rows.values()];
+}
+
+function monthsOf(rows) {
+  const months = new Map();
+  for (const r of rows) {
+    const key = monthOf(r.start);
+    if (!key) continue;
+    const m = months.get(key) || {key, total: 0, changed: 0};
+    m.total += 1;
+    if (r.diff !== "same") m.changed += 1;
+    months.set(key, m);
+  }
+  return [...months.values()].sort((a, b) => a.key.localeCompare(b.key));
+}
+
+function monthName(key) {
+  const [y, m] = key.split("-").map(Number);
+  return new Date(y, m - 1, 1).toLocaleString(undefined, {month: "short", year: "2-digit"});
+}
+
+function chipHtml(r) {
+  const colour = GOOGLE_COLOURS[r.colour] || NO_COLOUR;
+  const time = r.all_day ? "" : `<span class="t">${r.start.slice(11, 16)}</span>`;
+  const mark = MARKS[r.diff] ? `<span class="mk">${MARKS[r.diff]}</span>` : "";
+  const when = r.all_day ? "all day"
+    : `${r.start.slice(11, 16)}–${(r.end || "").slice(11, 16)}`;
+  const note = {created: "would be added", deleted: "would be removed",
+                updated: `would change: ${(r.fields || []).join(", ")}`}[r.diff] || "";
+  const tip = [r.title, when, r.location, note].filter(Boolean).join("\n");
+  return `<div class="chip ${r.diff}" style="--chip:${colour}" title="${escapeHtml(tip)}">` +
+         `${mark}${time}${escapeHtml(r.title)}</div>`;
+}
+
+function renderBoard() {
+  const rows = boardRows();
+  const months = monthsOf(rows);
+
+  // Land where the change is. Only when the month on screen has none of it - otherwise
+  // every keystroke would yank the view away from what you were looking at.
+  const current = months.find((m) => m.key === shownMonth);
+  const changed = months.filter((m) => m.changed);
+  if (!current) shownMonth = (changed[0] || months[0] || {}).key || monthOf(new Date().toISOString());
+  else if (changed.length && !current.changed) shownMonth = changed[0].key;
+
+  $("months").innerHTML = months.map((m) => `
+    <button data-month="${m.key}" class="${m.key === shownMonth ? "on" : ""}"
+            title="${m.total} events${m.changed ? `, ${m.changed} changing` : ""}">
+      ${monthName(m.key)}${m.changed ? `<span class="n c-mod">${m.changed}</span>` : ""}
+    </button>`).join("");
+  for (const b of $("months").querySelectorAll("button")) {
+    b.addEventListener("click", () => { shownMonth = b.dataset.month; renderBoard(); });
   }
 
-  if (!plan) { $("counts").innerHTML = ""; $("changes").innerHTML =
-      `<div class="empty">working it out…</div>`; return; }
+  renderGrid(rows);
+  renderList();
+}
 
-  const c = plan.counts;
-  $("counts").innerHTML =
-    `<span class="c-add">+${c.created} new</span>` +
-    `<span class="c-del">−${c.deleted} gone</span>` +
-    `<span class="c-mod">~${c.updated} changed</span>` +
-    `<span style="color:var(--dim)">${c.unchanged} untouched</span>`;
+function renderGrid(rows) {
+  const box = $("grid");
+  if (!shownMonth) { box.innerHTML = `<div class="empty">nothing to show</div>`; return; }
 
-  if (!plan.changes.length) {
-    $("changes").innerHTML = `<div class="empty">Nothing would change.</div>`;
+  const byDay = new Map();
+  for (const r of rows) {
+    const key = dayOf(r.start);
+    if (!key) continue;
+    if (!byDay.has(key)) byDay.set(key, []);
+    byDay.get(key).push(r);
+  }
+  for (const list of byDay.values()) {
+    list.sort((a, b) => (b.all_day - a.all_day) || a.start.localeCompare(b.start));
+  }
+
+  const [y, m] = shownMonth.split("-").map(Number);
+  const first = new Date(y, m - 1, 1);
+  const lead = (first.getDay() + 6) % 7;            // Monday-first
+  const days = new Date(y, m, 0).getDate();
+  const cells = Math.ceil((lead + days) / 7) * 7;
+  const today = keyOfDate(new Date());
+
+  const names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  let html = names.map((n) => `<div class="dow">${n}</div>`).join("");
+
+  for (let i = 0; i < cells; i++) {
+    const date = new Date(y, m - 1, 1 - lead + i);
+    const key = keyOfDate(date);
+    const classes = ["day"];
+    if (date.getMonth() !== m - 1) classes.push("outside");
+    if (date.getDay() === 0 || date.getDay() === 6) classes.push("weekend");
+    if (key === today) classes.push("today");
+    const chips = (byDay.get(key) || []).map(chipHtml).join("");
+    html += `<div class="${classes.join(" ")}"><span class="dnum">${date.getDate()}</span>${chips}</div>`;
+  }
+  box.innerHTML = html;
+}
+
+function renderList() {
+  const plan = lastDiff && lastDiff.vs_file;
+  const box = $("changes");
+  if (!plan || !plan.changes.length) {
+    box.innerHTML = `<div class="empty">Nothing would change, so there is nothing to list.</div>`;
     return;
   }
-  const marks = {created: "+", deleted: "−", updated: "~"};
-  $("changes").innerHTML = plan.changes.map((ch) => `
+  box.innerHTML = plan.changes.map((ch) => `
     <div class="chg ${ch.kind}" title="${ch.id}">
-      <span class="mark">${marks[ch.kind]}</span>
+      <span class="mark">${MARKS[ch.kind]}</span>
       <span class="when">${fmtWhen(ch.start)}</span>
       <span class="what">${escapeHtml(ch.title)}${
         ch.location ? ` <span style="opacity:.6">· ${escapeHtml(ch.location)}</span>` : ""}</span>
       <span class="fields">${ch.fields.join(", ")}</span>
     </div>`).join("") + (plan.truncated
       ? `<div class="empty">…more changes than are worth listing</div>` : "");
+}
+
+function renderCounts() {
+  const plan = lastDiff && lastDiff.vs_file;
+  const box = $("counts");
+  if (!plan) { box.innerHTML = `<span style="color:var(--dim)">working it out…</span>`; return; }
+
+  const c = plan.counts;
+  if (!(c.created + c.deleted + c.updated)) {
+    box.innerHTML = `<span style="color:var(--dim)">No change — ` +
+      `${c.unchanged} events either way.</span>`;
+    return;
+  }
+  const bits = [];
+  if (c.created) bits.push(`<span class="c-add">add ${c.created}</span>`);
+  if (c.deleted) bits.push(`<span class="c-del">remove ${c.deleted}</span>`);
+  if (c.updated) bits.push(`<span class="c-mod">change ${c.updated}</span>`);
+  box.innerHTML = `<span>Applying this would ${bits.join(", ")}.</span>` +
+    `<span style="color:var(--dim)">· ${c.unchanged} events stay as they are.</span>`;
+}
+
+function renderDiff(data) {
+  lastDiff = data;
+  // A settings file from before an option was renamed or removed no longer loads, which
+  // costs the comparison against git and nothing else. Say so rather than show nothing.
+  const scope = $("diffScope");
+  scope.title = (data && data.vs_head_error) || "";
+  scope.textContent = data && data.vs_head_error
+    ? `— ${data.vs_head_error.slice(0, 76)}` : "";
+  renderCounts();
+  renderBoard();
+  renderGit();            // the cloud's lag comes from the same payload
 }
 
 function escapeHtml(s) {
@@ -448,6 +661,25 @@ function renderGit() {
   else bits.push(
     `<div style="margin-top:8px"><span class="dot on"></span>` +
     `<span class="meta">the cloud is running what you see here</span></div>`);
+
+  // How far behind the cloud is, in events rather than commits - the number that says what
+  // the gap actually means. Lives here, not in the panel above: that one is about the edits
+  // you have not applied, this one about the apply you have not pushed.
+  const head = lastDiff && lastDiff.vs_head;
+  if (head) {
+    const c = head.counts;
+    const lag = c.created + c.deleted + c.updated;
+    bits.push(lag
+      ? `<div class="meta" style="margin-top:6px">Against the committed settings: ` +
+        `<span class="c-add">+${c.created}</span> <span class="c-del">−${c.deleted}</span> ` +
+        `<span class="c-mod">~${c.updated}</span> — the daily run would produce ` +
+        `a different calendar than the one above until this is pushed.</div>`
+      : `<div class="meta" style="margin-top:6px">The committed settings produce the same ` +
+        `calendar, so the daily run agrees with what you see.</div>`);
+  } else if (lastDiff && lastDiff.vs_head_error) {
+    bits.push(`<div class="meta" style="margin-top:6px">Cannot compare with the committed ` +
+              `settings: ${escapeHtml(lastDiff.vs_head_error)}</div>`);
+  }
 
   box.innerHTML = bits.join("");
 
@@ -499,7 +731,9 @@ async function refreshDiff() {
 }
 
 function renderAll() {
-  renderHeader(); renderCourses(); renderSwitches(); renderGit(); changed();
+  renderHeader(); renderCourses(); renderSwitches(); renderGit();
+  renderCounts(); renderBoard();     // draw the calendar now; the diff arrives shortly
+  changed();
 }
 
 // ---- actions ---------------------------------------------------------------
@@ -527,6 +761,23 @@ $("save").addEventListener("click", async () => {
 });
 
 $("discard").addEventListener("click", () => { draft = clone(state.settings); renderAll(); });
+
+function stepMonth(by) {
+  const months = monthsOf(boardRows()).map((m) => m.key);
+  const at = months.indexOf(shownMonth);
+  const next = months[Math.min(months.length - 1, Math.max(0, at + by))];
+  if (next) { shownMonth = next; renderBoard(); }
+}
+$("prevMonth").addEventListener("click", () => stepMonth(-1));
+$("nextMonth").addEventListener("click", () => stepMonth(1));
+
+$("viewToggle").addEventListener("click", () => {
+  asList = !asList;
+  $("grid").hidden = asList;
+  $("changes").hidden = !asList;
+  for (const id of ["prevMonth", "nextMonth"]) $(id).disabled = asList;
+  $("viewToggle").textContent = asList ? "As a month" : "As a list";
+});
 
 $("refresh").addEventListener("click", async () => {
   const btn = $("refresh");

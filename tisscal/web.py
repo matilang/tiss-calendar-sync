@@ -35,6 +35,7 @@ from .cache import Cache
 from .config import ConfigError, Settings, from_dict, load_config
 from .feed import parse_feed
 from .filters import matches_course
+from .gcal import _gcal_body
 from .model import VIENNA, Lecture
 from .pipeline import build_events
 from .plan import Plan, compare, once
@@ -107,6 +108,27 @@ def survey(raw: list[Lecture], built: list[Lecture], settings: Settings) -> list
     return sorted(rows.values(), key=lambda r: (not r["synced"], r["key"]))
 
 
+def event_row(gcal_id: str, body: dict) -> dict:
+    """One event flattened enough for a calendar grid to draw it.
+
+    Built from the Google request body rather than from the Lecture, so the grid shows the
+    title, the colour and the times that would actually be sent - there is no second
+    opinion to drift from the first. The page builds the same shape out of the before/after
+    bodies in a diff, which is what lets it draw an added event the same way as an existing
+    one.
+    """
+    start, end = body.get("start", {}), body.get("end", {})
+    return {
+        "id": gcal_id,
+        "title": body.get("summary", ""),
+        "location": body.get("location", ""),
+        "colour": body.get("colorId"),
+        "start": start.get("dateTime") or start.get("date") or "",
+        "end": end.get("dateTime") or end.get("date") or "",
+        "all_day": "date" in start,
+    }
+
+
 def plan_json(plan: Plan, limit: int = 500) -> dict:
     return {
         "summary": plan.summary,
@@ -176,6 +198,10 @@ class Interface:
             "settings": as_dict(settings),
             "courses": survey(raw, built, settings),
             "events": len(built),
+            # Every event the current settings would put on the calendar. The page needs the
+            # ones that do *not* change as much as the ones that do: a grid showing only the
+            # difference would show a handful of chips floating in an empty month.
+            "calendar": [event_row(ev.gcal_id, _gcal_body(ev, settings)) for ev in built],
             "cache": {name: round(age or 0) for name, age in self.cache.status().items()},
             "git": vcs.status(self.root),
             # Whether, never what.
