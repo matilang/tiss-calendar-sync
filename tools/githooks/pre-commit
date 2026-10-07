@@ -1,0 +1,8 @@
+#!/bin/sh
+# Installed with:  git config core.hooksPath tools/githooks
+# Refuses to commit a secret. See tools/check_staged.py for what and why.
+if [ -x .venv/Scripts/python.exe ]; then PY=.venv/Scripts/python.exe
+elif [ -x .venv/bin/python ]; then PY=.venv/bin/python
+else PY=python
+fi
+exec "$PY" tools/check_staged.py

@@ -44,6 +44,17 @@ Requires Python 3.11+ (the config is read with `tomllib`).
    `TISSCAL_CALENDAR_ID` take precedence over the file, which is how the cloud run gets
    them without a copy of the settings living in a repository secret.
 
+   Then install the commit guard, once per clone:
+
+   ```bash
+   git config core.hooksPath tools/githooks
+   ```
+
+   It refuses to commit `.secrets.toml`, a service account key, or anything shaped like a
+   feed token — *before* the commit exists. The test suite checks the same thing, but that
+   runs in CI, which is after the push; on a public repository the difference is between
+   amending a commit and rotating three credentials. `--no-verify` goes past it on purpose.
+
 3. **Google access** — two ways in.
 
    **Service account (recommended, needed for unattended runs).** No browser, and no

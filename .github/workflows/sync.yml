@@ -80,6 +80,30 @@ jobs:
             echo "tuwel=yes" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Mask the percent-encoded form of each secret
+        env:
+          GOOGLE_CALENDAR_ID: ${{ secrets.GOOGLE_CALENDAR_ID }}
+          TISS_ICAL_URL: ${{ secrets.TISS_ICAL_URL }}
+          TUWEL_ICAL_URL: ${{ secrets.TUWEL_ICAL_URL }}
+        run: |
+          set -euo pipefail
+          # GitHub hides a secret from the log by matching it literally. Google's API puts
+          # the calendar id in a request path percent-encoded - @ becomes %40 - so the
+          # literal never matches and an HttpError traceback would print it in the clear.
+          # On a private repository that is nobody's business but yours; on a public one the
+          # log is public too. So register the encoded forms as secrets in their own right.
+          python - <<'PY'
+          import os, urllib.parse
+          for name in ("GOOGLE_CALENDAR_ID", "TISS_ICAL_URL", "TUWEL_ICAL_URL"):
+              value = os.environ.get(name) or ""
+              if not value:
+                  continue
+              for encoded in {urllib.parse.quote(value, safe=""),
+                              urllib.parse.quote(value)}:
+                  if encoded != value:
+                      print(f"::add-mask::{encoded}")
+          PY
+
       - name: Sync TISS lectures, exams and registration reminders
         env:
           # The secrets reach the sync through the environment, which takes precedence
