@@ -11,12 +11,12 @@ it does that every morning without your laptop being on.
 You pick what gets synced on a local page that shows you the month before and after your
 change, so nothing reaches the calendar that you have not seen first.
 
-![The interface: a month of the calendar with the effect of ticking one more course drawn
-over it — new events outlined in green, and a strip of months saying how many fall in
-each](docs/interface.png)
+![The interface: a month of the calendar with the effect of a settings change drawn over it —
+events that would be added outlined in green, ones that would go struck through in red, and
+a strip of months saying how many changes fall in each](docs/interface.png)
 
-*Ticking one course here would add 31 events. The grid says where they land before anything
-is written.*
+*One course added, another dropped: 31 events would appear and 13 would go. The grid says
+where, before anything is written.*
 
 Python 3.11 or newer.
 
@@ -136,10 +136,13 @@ One local page, four parts.
 course you have just been admitted to shows up here before it is anywhere else, highlighted.
 Per course you can tick:
 
-- **Sync** — put its events on the calendar
-- **Scrape** — also read its TISS page for exam dates and registration windows
+- **Sync** — put its lectures and exercise slots on the calendar
+- **Exams** — also read its TISS page, which the feed does not cover: exam and retake
+  dates, and the windows when you can register for them
 - **Calendar name** — what it is called on the calendar, e.g. `VU MoGD` instead of
   `192.161 VU Management of Graph Data`
+
+Every column header carries a **?** explaining what ticking it does.
 
 **What gets synced** — the switches that are not per course: reminder times, whether past
 events are pruned, which registration windows to be reminded about. Each one shows the

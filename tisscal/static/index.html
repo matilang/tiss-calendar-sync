@@ -107,6 +107,24 @@
   .months button .n { font-size: 10px; font-weight: 700; margin-left: 5px;
                       padding: 0 5px; border-radius: 7px; vertical-align: 1px;
                       background: color-mix(in srgb, var(--mod) 30%, transparent); }
+  .help { display: inline-flex; align-items: center; justify-content: center;
+          width: 14px; height: 14px; margin-left: 5px; border-radius: 50%;
+          border: 1px solid var(--line); color: var(--dim); cursor: help;
+          font: 700 9.5px/1 var(--mono); vertical-align: 1px; position: relative; }
+  .help:hover, .help:focus-visible { border-color: var(--accent); color: var(--accent);
+                                     outline: none; }
+  .help::after {
+    content: attr(data-tip); position: absolute; top: calc(100% + 8px); left: 50%;
+    transform: translateX(-50%); width: 236px; padding: 8px 10px; z-index: 20;
+    background: var(--ink); color: var(--bg); border-radius: 5px;
+    font: 400 11.5px/1.45 system-ui, sans-serif; letter-spacing: 0; text-transform: none;
+    text-align: left; white-space: normal; opacity: 0; pointer-events: none;
+    transition: opacity .1s;
+  }
+  .help:hover::after, .help:focus-visible::after { opacity: 1; }
+  /* Near the right edge the balloon would be clipped by the panel, so anchor it instead. */
+  .help.tip-right::after { left: auto; right: -4px; transform: none; }
+
   .legend { display: flex; gap: 11px; font-size: 11.5px; color: var(--dim); }
   .legend .key::before { content: ""; display: inline-block; width: 9px; height: 9px;
                          border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
@@ -182,12 +200,21 @@
   <h2>Courses in the feed</h2>
   <div class="panel"><table>
     <thead><tr>
-      <th class="mid" title="Keep this course's events on the calendar">Sync</th>
-      <th class="mid" title="Read this course's TISS page for exam dates and registration windows">Scrape</th>
-      <th>Course</th><th>Calendar name</th>
-      <th class="num" title="Events this course has in the TISS iCal feed">Feed</th>
-      <th class="num" title="Events it would have on the calendar. Can exceed the feed count: exams and registration reminders are read off the course page, not the feed.">Calendar</th>
-      <th>Next</th>
+      <th class="mid">Sync<span class="help" tabindex="0" data-tip="Put this course's
+        lectures and exercise slots on the calendar.">?</span></th>
+      <th class="mid">Exams<span class="help" tabindex="0" data-tip="Also read this course's
+        TISS page, which the feed does not cover: exam and retake dates, and the windows
+        when you can register for them.">?</span></th>
+      <th>Course</th>
+      <th>Calendar name<span class="help" tabindex="0" data-tip="What it is called on the
+        calendar. Leave it empty to keep the TISS name without its course number.">?</span></th>
+      <th class="num">Feed<span class="help" tabindex="0" data-tip="How many events this
+        course has in the TISS feed.">?</span></th>
+      <th class="num">Calendar<span class="help tip-right" tabindex="0" data-tip="How many it
+        would have on the calendar. More than the feed is normal: exams and registration
+        reminders come off the course page, and are counted separately.">?</span></th>
+      <th>Next<span class="help tip-right" tabindex="0" data-tip="Its next event that has not
+        happened yet.">?</span></th>
     </tr></thead>
     <tbody id="courses"></tbody>
   </table></div>
