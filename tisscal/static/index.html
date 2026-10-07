@@ -288,14 +288,21 @@ function toggleList(path, value, on) {
 }
 
 // ---- rendering -------------------------------------------------------------
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+function weekdayOf(day) {
+  // Noon UTC, so the weekday of a calendar date is the same wherever this is read.
+  return WEEKDAYS[new Date(`${day}T12:00:00Z`).getUTCDay()];
+}
+
 function fmtWhen(iso) {
   if (!iso) return "";
-  const d = new Date(iso);
-  if (isNaN(d)) return iso.slice(0, 16).replace("T", " ");
-  const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-  const p = (n) => String(n).padStart(2, "0");
-  const time = iso.length > 10 ? ` ${p(d.getHours())}:${p(d.getMinutes())}` : "";
-  return `${days[d.getDay()]} ${p(d.getDate())}.${p(d.getMonth() + 1)}${time}`;
+  // Read straight off the ISO string, which carries Vienna's date and time, so this agrees
+  // with the grid - which places a chip by the same string - no matter where the browser is.
+  const day = iso.slice(0, 10);
+  if (day.length < 10) return iso;
+  const time = iso.length > 10 ? ` ${iso.slice(11, 16)}` : "";
+  return `${weekdayOf(day)} ${day.slice(8)}.${day.slice(5, 7)}${time}`;
 }
 
 function renderHeader() {
@@ -512,7 +519,10 @@ function monthsOf(rows) {
 
 function monthName(key) {
   const [y, m] = key.split("-").map(Number);
-  const name = new Date(y, m - 1, 1).toLocaleString(undefined, {month: "short"});
+  // en-GB, not the browser's locale. Passing undefined takes the machine's language, which
+  // put Polish month names next to the hard-coded English weekday headers - and every other
+  // label on this page is English too. One language or the other, not half of each.
+  const name = new Date(y, m - 1, 1).toLocaleString("en-GB", {month: "short"});
   // The year is dimmed rather than dropped: a semester spans a new year, and "sty" next to
   // "paź" without one is ambiguous exactly when it matters.
   return `${name}<span class="yr">${String(y).slice(2)}</span>`;
