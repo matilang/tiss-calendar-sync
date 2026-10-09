@@ -57,8 +57,16 @@ merge_parallel_rooms = true
 # calendar, plus reminders for deadlines long gone. Prune those.
 prune_past = true
 # ...but keep these even once they are over, so the dates stay available to look up.
+# Exam dates are worth looking back at; a lecture you sat through is not.
 keep_past_kinds = ["exam"]
-keep_past_keywords = ["Exercise", "Q&A", "Q & A", "Test", "Prüfung"]
+# Matched as words, not as fragments: "Test" keeps "Test 2" and not "Latest news".
+#
+# "Exercise" used to be in this list and had to go. Every exercise slot of a course with
+# named groups is described "Exercises Group B", so the keyword matched all of them and
+# every exercise that had already happened stayed on the calendar for good. 192.216 left
+# three behind within a week of being added. The exercise dates are on the TISS course
+# page if they are ever needed; they do not belong on a calendar of what is still to come.
+keep_past_keywords = ["Q&A", "Q & A", "Test", "Prüfung"]
 
 [exercises]
 # Telling exercise slots apart from lectures, and showing them differently.
@@ -98,6 +106,31 @@ color_id = "7"
 "192.174" = "VU ML4Opt"     # Machine Learning for Optimization
 "193.219" = "PR HAI"        # Human-agent Interaction
 "192.216" = "VU EoAI"
+
+[groups]
+# Which exercise group is yours, per course number.
+#
+# Most courses need no entry. TISS normally puts only the group you registered for in the
+# feed - 194.187 sends group 3 and nothing else - so there is nothing to choose.
+#
+# A few courses attach the appointments to the course instead of to the group, and then
+# everybody's slots arrive in everybody's feed. 192.216 is one: all three of its groups
+# are in the feed whether you registered or not, so without an entry here two thirds of
+# its exercise slots on the calendar are other people's. Nothing in the feed says which
+# group is yours, and the course page only says so to someone logged in, so this is the
+# one thing that has to be stated rather than discovered.
+#
+# The value is read loosely - "B", "b", "Group B" and "Exercises Group B" all mean the
+# same group, as do "3" and "3_11:00-12:00" - so whatever you copy out of TISS works.
+# An event that names no group at all is never dropped, so this cannot hide a lecture.
+#
+# Left empty on purpose: picking a group for someone removes the other groups' slots from
+# their calendar, and guessing wrong removes theirs. Pick it in the Group column of
+# `python tiss_sync.py ui`, which lists the groups the feed actually has and how many
+# events each one would take away.
+#
+#   "192.216" = "B"
+"192.216" = "B"
 
 [semester]
 # Only events inside this window are synced. Exams and registration deadlines from
