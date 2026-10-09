@@ -25,7 +25,6 @@ profile = "config"
 courses = [
   "194.187",      # VU Advanced Software Engineering
   "186.814",      # VU Algorithmics
-  "193.219",      # PR Human-agent Interaction (not registered yet -> not in the feed)
   "192.174",      # VU Machine Learning for Optimization
   "192.161",      # VU Management of Graph Data
   "no lectures",  # keeps the TISS holiday / break markers
