@@ -29,6 +29,7 @@ courses = [
   "192.174",      # VU Machine Learning for Optimization
   "192.161",      # VU Management of Graph Data
   "no lectures",  # keeps the TISS holiday / break markers
+  "192.216",      # VU The Essentials of AI
 ]
 
 # Events whose title or CATEGORIES contain any of these are dropped (case-insensitive).
@@ -114,6 +115,7 @@ courses = [
   "192161",   # Management of Graph Data  - 2 exams + 2 re-exams
   "192174",   # ML for Optimization       - no exams listed
   "193219",   # Human-agent Interaction   - registration closes 09.10.2026 17:00
+  "192216",   # The Essentials of AI
 ]
 semester = "2026W"
 # Also remind before each registration window *closes*, not just when it opens.
