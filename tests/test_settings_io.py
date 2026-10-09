@@ -220,3 +220,58 @@ class TestWritingToDisk:
 
 def load_text(text: str):
     return from_dict(tomllib.loads(text))
+
+
+class TestAnnotatingWhatIsAdded:
+    """Every course in settings.toml was written by hand with its name beside it. A course
+    ticked in the interface arrived as a bare number, so the file explained a little less
+    each time the page was used - a slow loss that nothing would ever have reported."""
+
+    # A course number the committed settings do not have. Asserted rather than assumed: the
+    # first version of these tests added 192.216, which the working copy had just gained, so
+    # "add it" was a no-op and the test failed for a reason that had nothing to do with it.
+    ABSENT = "184.702"
+    NOTE = "VU Advanced Internet Computing"
+
+    def test_the_assumption_these_tests_rest_on(self):
+        assert self.ABSENT not in load(ROOT / "settings.toml").courses
+
+    def with_it_added(self, notes=None):
+        path = ROOT / "settings.toml"
+        new = shift(load(path), courses=list(load(path).courses) + [self.ABSENT])
+        return apply(path.read_text(encoding="utf-8"), new, notes=notes)
+
+    def test_an_added_item_carries_its_note(self):
+        out = self.with_it_added({"courses": {self.ABSENT: self.NOTE}})
+        assert f'"{self.ABSENT}",' in out
+        assert f"# {self.NOTE}" in out
+
+    def test_an_item_without_a_note_is_still_added(self):
+        assert self.ABSENT in load_text(self.with_it_added({"courses": {}})).courses
+
+    def test_the_other_notes_still_survive(self):
+        text = (ROOT / "settings.toml").read_text(encoding="utf-8")
+        out = self.with_it_added({"courses": {self.ABSENT: self.NOTE}})
+        assert not set(comments(text)) - set(comments(out))
+
+    def test_it_lines_up_with_the_items_above(self):
+        out = self.with_it_added({"courses": {self.ABSENT: self.NOTE}})
+        added = [l for l in out.splitlines() if f'"{self.ABSENT}"' in l][0]
+        neighbour = [l for l in out.splitlines() if '"186.814",' in l][0]
+        assert len(added) - len(added.lstrip()) == len(neighbour) - len(neighbour.lstrip())
+
+    def test_the_result_still_loads(self):
+        out = self.with_it_added({"courses": {self.ABSENT: self.NOTE}})
+        assert self.ABSENT in from_dict(tomllib.loads(out)).courses
+
+    def test_a_single_line_array_is_not_forced_open(self, tmp_path):
+        """exclude_keywords = ["Sprechstunde"] is one line and should stay one line; a
+        comment cannot go into it without breaking it apart."""
+        path = tmp_path / "s.toml"
+        path.write_text('exclude_keywords = ["Sprechstunde"]\n', encoding="utf-8")
+        out = apply(path.read_text(encoding="utf-8"),
+                    shift(load(path), exclude_keywords=["Sprechstunde", "Tutorium"]),
+                    notes={"exclude_keywords": {"Tutorium": "a note that cannot fit"}})
+        assert out.count("\n") == 1
+        assert "a note that cannot fit" not in out
+        assert load_text(out).exclude_keywords == ("Sprechstunde", "Tutorium")

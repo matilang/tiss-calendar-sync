@@ -207,7 +207,8 @@
         when you can register for them.">?</span></th>
       <th>Course</th>
       <th>Calendar name<span class="help" tabindex="0" data-tip="What it is called on the
-        calendar. Leave it empty to keep the TISS name without its course number.">?</span></th>
+        calendar. The grey text is the name it gets on its own, with the course number
+        removed - type here only to shorten it, for example VU MoGD.">?</span></th>
       <th class="num">Feed<span class="help" tabindex="0" data-tip="How many events this
         course has in the TISS feed.">?</span></th>
       <th class="num">Calendar<span class="help tip-right" tabindex="0" data-tip="How many it
@@ -294,13 +295,13 @@ function showError(msg) {
 function get(path) {
   return path.split(".").reduce((o, k) => (o === undefined ? o : o[k]), draft);
 }
-function put(path, value) {
+function put(path, value, {redrawTable = true} = {}) {
   const keys = path.split(".");
   const last = keys.pop();
   let o = draft;
   for (const k of keys) { if (o[k] === undefined || o[k] === null) o[k] = {}; o = o[k]; }
   o[last] = value;
-  changed();
+  changed({redrawTable});
 }
 function inList(path, value) {
   const list = get(path) || [];
@@ -392,7 +393,7 @@ function renderCourses() {
       input.addEventListener("input", () => {
         const titles = Object.assign({}, draft.titles || {});
         if (input.value.trim()) titles[nr] = input.value.trim(); else delete titles[nr];
-        put("titles", titles);
+        put("titles", titles, {redrawTable: false});
       });
       label.appendChild(input);
     } else {
@@ -754,14 +755,18 @@ function renderGit() {
   }
 }
 
-function changed() {
+function changed({redrawTable = true} = {}) {
   const dirty = !eq(draft, state.settings);
   $("dirty").innerHTML = dirty
     ? `<span class="dot off"></span>unsaved edits in this page`
     : `<span class="dot on"></span>no unsaved edits`;
   $("save").disabled = !dirty;
   $("discard").disabled = !dirty;
-  renderCourses();            // checkboxes can change which rows look active
+  // Ticking a checkbox changes which rows look active, so the table is redrawn - but
+  // typing in a row does not, and redrawing then destroyed the very input being typed in.
+  // One letter per click, focus lost, caret gone. Hence the flag: the table is rebuilt
+  // when its shape changes, not when a field in it holds a different string.
+  if (redrawTable) renderCourses();
   clearTimeout(diffTimer);
   diffTimer = setTimeout(refreshDiff, 180);
 }

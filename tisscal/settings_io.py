@@ -105,33 +105,56 @@ def differences(text: str, new: Settings) -> dict[str, tuple[Any, Any]]:
     return out
 
 
-def _set_array(array, values: list) -> None:
+def _indent_of(array) -> str:
+    """The indentation the array's existing items use, so an added one lines up."""
+    for line in array.as_string().splitlines()[1:]:
+        body = line.lstrip(" ")
+        if body and not body.startswith("]"):
+            return line[:len(line) - len(body)]
+    return "  "
+
+
+def _set_array(array, values: list, notes: Mapping[str, str] | None = None) -> None:
     """Make a tomlkit array hold `values`, keeping per-item comments where possible.
 
     settings.toml annotates its course list item by item ("186.814",  # VU Algorithmics),
     and replacing the array wholesale would delete every one of those notes. Removing and
     appending individual items keeps them. A real reorder cannot be expressed that way, so
     it falls back to replacing - and loses the comments, which is unavoidable and rare.
+
+    `notes` annotates what is *added*. Without it the file slowly loses its own
+    documentation: every hand-written course carries its name in a comment, and a course
+    added through the interface arrived as a bare number, so the more the page was used the
+    less the file explained. Only applied to arrays that are already written one item per
+    line - putting a comment in a single-line array would force it to grow.
     """
     old = list(array)
     kept = [v for v in old if v in values]
     added = [v for v in values if v not in old]
-    if kept + added == values:
-        for v in old:
-            if v not in values:
-                array.remove(v)
-        for v in added:
-            array.append(v)
-    else:
+    if kept + added != values:
         del array[:]
         for v in values:
             array.append(v)
+        return
+
+    for v in old:
+        if v not in values:
+            array.remove(v)
+
+    multiline = "\n" in array.as_string()
+    indent = _indent_of(array)
+    for v in added:
+        note = (notes or {}).get(v)
+        if note and multiline:
+            array.add_line(v, indent=indent, comment=note)
+        else:
+            array.append(v)
 
 
-def _assign(container, key: str, value: Any) -> None:
+def _assign(container, key: str, value: Any, notes: Mapping[str, str] | None = None) -> None:
     existing = container.get(key)
     if isinstance(value, list) and isinstance(existing, list):
-        _set_array(existing, value)
+        _set_array(existing, value, notes)
     elif isinstance(value, dict) and isinstance(existing, (dict, tomlkit.items.Table)):
         for k in [k for k in existing if k not in value]:
             del existing[k]
@@ -142,25 +165,32 @@ def _assign(container, key: str, value: Any) -> None:
         container[key] = value
 
 
-def apply(text: str, new: Settings) -> str:
-    """The file's text with `new` written into it. Unchanged values are left alone."""
+def apply(text: str, new: Settings, *,
+          notes: Mapping[str, Mapping[str, str]] | None = None) -> str:
+    """The file's text with `new` written into it. Unchanged values are left alone.
+
+    `notes` maps a dotted key to {value: comment}, used to annotate newly added list items -
+    see _set_array.
+    """
     changes = differences(text, new)
     if not changes:
         return text
 
+    notes = notes or {}
     doc = tomlkit.parse(text)
     for dotted, (_, value) in changes.items():
         section, _, key = dotted.partition(".")
+        note = notes.get(dotted)
         if key:
             if section not in doc:
                 doc[section] = tomlkit.table()
-            _assign(doc[section], key, value)
+            _assign(doc[section], key, value, note)
         elif section in TABLE_FIELDS:
             if section not in doc:
                 doc[section] = tomlkit.table()
-            _assign(doc, section, value)
+            _assign(doc, section, value, note)
         else:
-            _assign(doc, section, value)
+            _assign(doc, section, value, note)
 
     out = tomlkit.dumps(doc)
 
@@ -173,7 +203,8 @@ def apply(text: str, new: Settings) -> str:
     return out
 
 
-def write(path: Path, new: Settings) -> dict[str, tuple[Any, Any]]:
+def write(path: Path, new: Settings, *,
+          notes: Mapping[str, Mapping[str, str]] | None = None) -> dict[str, tuple[Any, Any]]:
     """Save `new` into `path`, returning what changed. Writes nothing if nothing changed.
 
     Atomic: the new text goes to a temporary file in the same directory and then replaces
@@ -185,7 +216,7 @@ def write(path: Path, new: Settings) -> dict[str, tuple[Any, Any]]:
     if not changes:
         return {}
 
-    out = apply(text, new)
+    out = apply(text, new, notes=notes)
     tmp = path.with_name(path.name + ".tmp")
     try:
         tmp.write_bytes(out.encode("utf-8"))

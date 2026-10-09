@@ -229,6 +229,22 @@ class Interface:
                 out["vs_head_error"] = f"the committed {self.path.name} no longer loads: {e}"
         return out
 
+    def course_notes(self) -> dict[str, dict[str, str]]:
+        """A name for each course number, to annotate what the page adds to a list.
+
+        Every course in settings.toml was hand-written with its name beside it. A course
+        ticked on the page used to arrive as a bare number, so the file explained a little
+        less every time the interface was used. Now it arrives the way the others did.
+        """
+        names: dict[str, str] = {}
+        for ev in self.feed():
+            nr = ev.course_nr
+            if nr and nr not in names:
+                names[nr] = ev.summary.replace(nr, "", 1).strip(" -–:")[:46]
+        return {"courses": names,
+                # [scrape].courses holds the number without its dot.
+                "scrape.courses": {nr.replace(".", ""): name for nr, name in names.items()}}
+
     def save(self, payload: dict) -> dict:
         proposed = self.proposed(payload["settings"])
         expected = payload.get("mtime")
@@ -239,7 +255,7 @@ class Interface:
             raise Conflict(f"{self.path.name} changed on disk since this page loaded. "
                            f"Reload to pick up the new version - your toggles will be lost, "
                            f"which is better than discarding the edit on disk.")
-        changed = write_settings(self.path, proposed)
+        changed = write_settings(self.path, proposed, notes=self.course_notes())
         return {"changed": {k: list(v) for k, v in changed.items()},
                 "state": self.state()}
 

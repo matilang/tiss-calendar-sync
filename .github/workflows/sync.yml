@@ -24,10 +24,18 @@ name: TISS calendar sync
 
 on:
   schedule:
-    # 05:00 UTC. GitHub cron has no daylight saving, so this lands at 07:00 Vienna time
-    # in summer and 06:00 in winter. Runs are also commonly 5-30 min late at peak hours,
-    # which does not matter for a once-a-day job.
-    - cron: "0 5 * * *"
+    # 03:23 UTC: 05:23 in Vienna in summer, 04:23 in winter, since GitHub cron has no
+    # daylight saving.
+    #
+    # The odd minute is the point. A scheduled workflow is queued, not guaranteed, and the
+    # queue is longest at the start of every hour - GitHub's own advice is to pick a
+    # different minute. On "0 5 * * *" this job was landing around 11:40 UTC, nearly seven
+    # hours late, and some days not at all. Starting in the small hours leaves room for a
+    # long delay and still finishes before the morning.
+    #
+    # If runs still go missing, add a second line here rather than moving this one: two
+    # independent schedules are the only real defence against a skipped queue.
+    - cron: "23 3 * * *"
   # Lets you trigger it by hand from the Actions tab - use this for the first test.
   workflow_dispatch:
 
