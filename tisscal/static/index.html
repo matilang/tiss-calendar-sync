@@ -57,6 +57,14 @@
     border: 1px solid var(--line); border-radius: 4px; padding: 3px 6px; width: 100%;
   }
   input[type=text]:focus, input[type=number]:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  select {
+    font: inherit; font-family: var(--mono); font-size: 12.5px;
+    background: var(--bg); color: var(--ink);
+    border: 1px solid var(--line); border-radius: 4px; padding: 2px 4px; cursor: pointer;
+  }
+  select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  /* A course whose groups are all still on the calendar: the choice is worth making. */
+  select.unset { border-color: var(--mod); color: var(--mod); }
   input[type=checkbox] { width: 15px; height: 15px; accent-color: var(--accent); cursor: pointer; }
   label.row { display: flex; align-items: center; gap: 8px; cursor: pointer; }
   label.row span.hint { color: var(--dim); font-family: var(--mono); font-size: 11.5px; }
@@ -205,6 +213,10 @@
       <th class="mid">Exams<span class="help" tabindex="0" data-tip="Also read this course's
         TISS page, which the feed does not cover: exam and retake dates, and the windows
         when you can register for them.">?</span></th>
+      <th class="mid">Group<span class="help" tabindex="0" data-tip="Which exercise group is
+        yours. Most courses need nothing here: TISS already sends only the group you
+        registered for. A few send every group's slots to everyone - those get a dropdown,
+        and until you pick, other people's exercises are on your calendar too.">?</span></th>
       <th>Course</th>
       <th>Calendar name<span class="help" tabindex="0" data-tip="What it is called on the
         calendar. The grey text is the name it gets on its own, with the course number
@@ -346,7 +358,26 @@ function renderHeader() {
     notes.push("No calendar id is set, so nothing can be synced yet - put it in .secrets.toml.");
   if (!state.secrets.ical_url)
     notes.push("No feed URL is set.");
-  $("notice").innerHTML = notes.map((n) => `<div class="warn">${n}</div>`).join("");
+
+  // The silent one. A course that sends every group's slots looks completely normal on the
+  // calendar - the extra events are real events, at real times, in real rooms, just not
+  // yours - so nothing about it draws attention until someone says so here.
+  for (const c of state.courses) {
+    const tokens = Object.keys(c.groups || {});
+    if (tokens.length < 2 || !c.in_config) continue;
+    if ((draft.groups || {})[c.course_nr]) continue;
+    const biggest = Math.max(...tokens.map((t) => c.groups[t].events));
+    const total = tokens.reduce((n, t) => n + c.groups[t].events, 0);
+    // A lower bound, and said as one: only one of these groups is yours, so at best the
+    // largest of them is, and everything else is somebody else's timetable.
+    notes.push(
+      `${c.course_nr} puts all ${tokens.length} of its exercise groups in the feed ` +
+      `(${tokens.sort().map((t) => `${t}: ${c.groups[t].events}`).join(", ")}) and no group ` +
+      `is picked, so at least ${total - biggest} of those ${total} slots are not yours. ` +
+      `Pick yours in the Group column to see exactly which events come off.`);
+  }
+
+  $("notice").innerHTML = notes.map((n) => `<div class="warn">${escapeHtml(n)}</div>`).join("");
 }
 
 function renderCourses() {
@@ -376,6 +407,18 @@ function renderCourses() {
         (on) => toggleList("scrape.courses", bare, on)));
     }
     tr.appendChild(scr);
+
+    // Group. Only a course that delivers more than one group needs a choice; the rest
+    // show what they deliver, or nothing, so the column stays quiet where it is irrelevant.
+    const grp = document.createElement("td"); grp.className = "mid";
+    const tokens = Object.keys(c.groups || {}).sort();
+    if (nr && tokens.length > 1) {
+      grp.appendChild(groupPicker(nr, c.groups, tokens));
+    } else if (tokens.length === 1) {
+      grp.innerHTML = `<span class="meta" title="${escapeHtml(c.groups[tokens[0]].name)}` +
+        ` - the only group in the feed, so there is nothing to choose">${escapeHtml(tokens[0])}</span>`;
+    }
+    tr.appendChild(grp);
 
     const name = document.createElement("td");
     name.innerHTML = nr
@@ -411,6 +454,41 @@ function renderCourses() {
       `<td class="meta">${fmtWhen(c.next)}</td>`);
     body.appendChild(tr);
   }
+}
+
+// The options are the groups this course actually has events for, so there is no letter to
+// know and no way to pick one that does not exist. The value written is the bare token
+// ("B"); the server understands "Group B" and "Exercises Group B" just as well, so a value
+// typed into the file by hand is kept as an extra option rather than silently replaced -
+// re-deriving the token here would mean a second copy of groups.py in JavaScript, and two
+// copies of a rule are two rules.
+function groupPicker(nr, found, tokens) {
+  const current = (draft.groups || {})[nr] || "";
+  const sel = document.createElement("select");
+  const total = tokens.reduce((n, t) => n + found[t].events, 0);
+
+  const all = new Option(`all ${tokens.length}`, "");
+  all.title = `Every group's slots stay on the calendar - ${total} events`;
+  sel.appendChild(all);
+  for (const t of tokens) {
+    const opt = new Option(`${t} (${found[t].events})`, t);
+    opt.title = `${found[t].name} - ${found[t].events} events in the feed`;
+    sel.appendChild(opt);
+  }
+  if (current && !tokens.includes(current)) {
+    const kept = new Option(current, current);
+    kept.title = "Written in the settings file by hand; kept as it is";
+    sel.appendChild(kept);
+  }
+
+  sel.value = current;
+  if (!current) sel.classList.add("unset");
+  sel.addEventListener("change", () => {
+    const groups = Object.assign({}, draft.groups || {});
+    if (sel.value) groups[nr] = sel.value; else delete groups[nr];
+    put("groups", groups);
+  });
+  return sel;
 }
 
 function checkbox(on, onChange) {
@@ -767,6 +845,9 @@ function changed({redrawTable = true} = {}) {
   // One letter per click, focus lost, caret gone. Hence the flag: the table is rebuilt
   // when its shape changes, not when a field in it holds a different string.
   if (redrawTable) renderCourses();
+  // The notices read the draft, not the file - the "no group picked" warning has to go
+  // away when you pick one, not when you save.
+  renderHeader();
   clearTimeout(diffTimer);
   diffTimer = setTimeout(refreshDiff, 180);
 }

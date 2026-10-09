@@ -23,6 +23,12 @@ in. It was removed: `drop_placeholders` already deals with the real case, becaus
 registration TISS publishes the whole ten-hour span the groups run in, and dropping
 anything that long needs no per-course list to maintain.
 
+`keep_chosen_groups` is not that step coming back. The placeholder rule handles the course
+that publishes one long block per group; this handles the course that publishes every
+group's real appointments to everybody - 192.216 sends all three groups' slots, 1-2 h
+each, so there is no duration to tell them apart by and nothing in the feed says which is
+yours. See groups.py.
+
 tools/check_ordering.py reorders the steps one at a time and reports which moves the
 tests actually catch - worth re-running after adding a step, since a comment claiming an
 order matters is worth nothing on its own.
@@ -31,7 +37,8 @@ from __future__ import annotations
 
 from .config import Settings
 from .events import scraped_events
-from .filters import drop_placeholders, filter_events, prune_past
+from .filters import (drop_placeholders, filter_events, keep_chosen_groups,
+                      prune_past)
 from .merge import merge_parallel
 from .model import Lecture
 
@@ -44,6 +51,10 @@ def build_events(raw: list[Lecture], settings: Settings, scraper=None) -> list[L
     events = filter_events(raw, settings.semester, settings.courses,
                            settings.exclude_keywords)
     events = drop_placeholders(events, settings.placeholder_min_hours)
+    # Before scraping only for readability - it belongs with the other two feed filters.
+    # keep_chosen_groups ignores anything that is not a feed event itself, so moving it
+    # is safe and check_ordering.py is expected to report this move as uncaught.
+    events = keep_chosen_groups(events, settings.groups)
 
     if settings.scrape.courses:
         events += scraped_events(settings.scrape, settings.titles, scraper=scraper)

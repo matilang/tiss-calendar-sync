@@ -142,9 +142,13 @@ def test_the_settings_file_documents_every_section():
     import tomllib
     from pathlib import Path
 
+    from tisscal.settings_io import TABLE_FIELDS
+
     raw = tomllib.loads((Path(__file__).resolve().parent.parent / "settings.toml")
                         .read_text(encoding="utf-8"))
-    # titles is a plain field rather than a dataclass section, but it is written as one.
-    expected = set(SECTIONS) | {"titles"}
+    # TABLE_FIELDS are plain fields on Settings that are nonetheless written as sections -
+    # titles, groups. Taken from the writer rather than listed again here, so a new one
+    # fails this test until the example documents it too.
+    expected = set(SECTIONS) | set(TABLE_FIELDS)
     missing = sorted(expected - set(raw))
     assert not missing, f"settings.toml documents no {missing}"

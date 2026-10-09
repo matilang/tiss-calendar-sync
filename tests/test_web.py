@@ -115,6 +115,29 @@ class TestSurvey:
         rows = {r["key"] for r in survey(events, build_events(events, cfg), cfg)}
         assert "(no course number)" in rows
 
+    def test_the_groups_a_course_has_are_reported_with_their_counts(self, cfg):
+        """What the Group dropdown is built from.
+
+        Discovered rather than configured: the options are the groups the feed actually
+        delivers, so there is no letter to know and no way to pick one that does not
+        exist. The counts are what make the choice obvious - "A: 2, B: 1" says plainly
+        that most of what is on the calendar is not yours.
+        """
+        feed = [make_event(course_nr="192.216", description=d, uid=f"u{i}")
+                for i, d in enumerate(["Lecture", "Exercises Group A (Labs)",
+                                       "Exercises Group A (Labs)", "Exercises Group B"])]
+        row = survey(feed, feed, cfg)[0]
+        assert row["groups"] == {
+            "A": {"name": "Exercises Group A (Labs)", "events": 2},
+            "B": {"name": "Exercises Group B", "events": 1},
+        }
+
+    def test_a_course_with_no_groups_reports_none(self, cfg):
+        """Most courses. The column has to stay empty for them rather than offer a choice
+        that would do nothing."""
+        feed = [make_event(description="Lecture")]
+        assert survey(feed, feed, cfg)[0]["groups"] == {}
+
 
 class TestPlanJson:
     def test_the_shape_the_page_expects(self):

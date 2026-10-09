@@ -114,6 +114,10 @@ class Settings:
     placeholder_min_hours: float = 4
     merge_parallel_rooms: bool = True
     titles: Mapping[str, str] = field(default_factory=dict)
+    # Which exercise group is yours, per course number. Only needed for courses whose feed
+    # carries every group's appointments rather than just yours - see groups.py for why
+    # that differs per course, and why it cannot be worked out without being told.
+    groups: Mapping[str, str] = field(default_factory=dict)
     semester: Semester = field(default_factory=Semester)
     exercises: Exercises = field(default_factory=Exercises)
     retention: Retention = field(default_factory=Retention)

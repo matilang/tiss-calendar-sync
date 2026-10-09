@@ -125,6 +125,32 @@ class TestPrunePast:
         for desc in ("Algorithmics Q&A", "Q & A 2"):
             assert len(T.prune_past([self._past(description=desc)], self._cfg(cfg).retention)) == 1
 
+    def test_a_keyword_means_a_word(self, cfg):
+        """Matching as bare substrings kept things nothing in the list named.
+
+        "Test" is in the live exam keywords, and as a substring it is inside "Latest",
+        "Protest" and "Contest" - so an event could stay on the calendar for ever because
+        of a word that merely contained a keyword. A keyword is a word now.
+        """
+        settings = shift(cfg, retention={"prune_past": True, "keep_past_keywords": ["Test"]})
+        assert T.prune_past([self._past(description="Latest news")], settings.retention) == []
+        assert len(T.prune_past([self._past(description="Test 2")], settings.retention)) == 1
+        # Still a word with a plural on it, not a coincidence.
+        assert len(T.prune_past([self._past(description="Tests")], settings.retention)) == 1
+
+    def test_past_exercise_slots_of_a_named_group_do_not_linger(self, cfg):
+        """Why "Exercise" came out of the live keep_past_keywords.
+
+        A course with named exercise groups describes every slot "Exercises Group B", so
+        the keyword matched all of them and each one that had happened stayed on the
+        calendar permanently - three of them within a week of 192.216 being added.
+        """
+        settings = shift(cfg, retention={"prune_past": True,
+                                         "keep_past_keywords": ["Q&A", "Q & A"]})
+        gone = [self._past(description="Exercises Group B"),
+                self._past(description="Exercises Group A (Labs)")]
+        assert T.prune_past(gone, settings.retention) == []
+
     def test_past_registration_reminder_is_dropped(self, cfg):
         ev = self._past(description="opens", kind="registration", scope="exam")
         assert T.prune_past([ev], self._cfg(cfg).retention) == []

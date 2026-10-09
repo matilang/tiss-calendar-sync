@@ -27,6 +27,7 @@ STEPS = {
     "filter": ("    events = filter_events(raw, settings.semester, settings.courses,\n"
                "                           settings.exclude_keywords)\n"),
     "placeholders": "    events = drop_placeholders(events, settings.placeholder_min_hours)\n",
+    "groups": "    events = keep_chosen_groups(events, settings.groups)\n",
     "scrape": ("    if settings.scrape.courses:\n"
                "        events += scraped_events(settings.scrape, settings.titles,"
                " scraper=scraper)\n"),
@@ -35,13 +36,19 @@ STEPS = {
     "prune": "    events = prune_past(events, settings.retention)\n",
 }
 
-ORDER = ["filter", "placeholders", "scrape", "merge", "prune"]
+ORDER = ["filter", "placeholders", "groups", "scrape", "merge", "prune"]
 
 MUTATIONS = {
-    "scrape before filter": ["scrape", "filter", "placeholders", "merge", "prune"],
-    "placeholders after scrape": ["filter", "scrape", "placeholders", "merge", "prune"],
-    "prune before scrape": ["filter", "placeholders", "prune", "scrape", "merge"],
-    "merge before scrape": ["filter", "placeholders", "merge", "scrape", "prune"],
+    "scrape before filter": ["scrape", "filter", "placeholders", "groups", "merge", "prune"],
+    "placeholders after scrape":
+        ["filter", "scrape", "placeholders", "groups", "merge", "prune"],
+    "prune before scrape": ["filter", "placeholders", "groups", "prune", "scrape", "merge"],
+    "merge before scrape": ["filter", "placeholders", "groups", "merge", "scrape", "prune"],
+    # Expected to be unnoticed, and that is the point: keep_chosen_groups only ever looks
+    # at feed events, so it is free to move. If this one ever starts being caught, the
+    # claim in its docstring - that the kind check, not the position, is what protects the
+    # group-registration reminder - has stopped being true.
+    "groups after scrape": ["filter", "placeholders", "scrape", "groups", "merge", "prune"],
 }
 
 TAIL = ("    return sorted({e.gcal_id: e for e in events}.values(), "

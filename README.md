@@ -139,6 +139,11 @@ Per course you can tick:
 - **Sync** — put its lectures and exercise slots on the calendar
 - **Exams** — also read its TISS page, which the feed does not cover: exam and retake
   dates, and the windows when you can register for them
+- **Group** — which exercise group is yours. Most courses need nothing here, because TISS
+  sends only the group you registered for. A few attach the appointments to the course
+  instead, so *everyone's* slots arrive in everyone's feed; those get a dropdown listing
+  the groups the feed actually has and how many events each one holds, and the page warns
+  you until you pick one
 - **Calendar name** — what it is called on the calendar, e.g. `VU MoGD` instead of
   `192.161 VU Management of Graph Data`
 

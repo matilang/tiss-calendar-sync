@@ -30,6 +30,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 
+from . import groups as groups_mod
 from . import vcs
 from .cache import Cache
 from .config import ConfigError, Settings, from_dict, load_config
@@ -82,7 +83,12 @@ def survey(raw: list[Lecture], built: list[Lecture], settings: Settings) -> list
             rows[key] = {"course_nr": ev.course_nr or "", "key": key,
                          "label": course_label(ev.course_nr, settings.titles),
                          "feed_title": ev.summary, "in_feed": 0, "synced": 0,
-                         "scraped": 0, "in_config": False, "next": None}
+                         "scraped": 0, "in_config": False, "next": None,
+                         # Exercise groups this course has events for, so the page can
+                         # offer the ones that exist instead of asking you to type a
+                         # letter. Counted per group: "A: 39, B: 14" is what makes it
+                         # obvious that only one of them is yours.
+                         "groups": {}}
         return rows[key]
 
     for ev in raw:
@@ -92,6 +98,10 @@ def survey(raw: list[Lecture], built: list[Lecture], settings: Settings) -> list
         # its events actually survive the course filter.
         if matches_course(ev, settings.courses):
             r["in_config"] = True
+        token = groups_mod.group_of(ev.description or "")
+        if token:
+            seen = r["groups"].setdefault(token, {"name": ev.description, "events": 0})
+            seen["events"] += 1
 
     for ev in built:
         r = row(ev)

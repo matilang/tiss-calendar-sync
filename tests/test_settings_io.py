@@ -178,6 +178,38 @@ class TestTitles:
         assert "193.219" not in load_text(out).titles
 
 
+class TestGroups:
+    """[groups] is written through the interface, into a section that ships empty.
+
+    It is the first setting whose value nobody can derive - which group you registered for
+    is not in the feed - so the path from a dropdown to the file has to work on a section
+    that has a heading, a page of comments and no keys at all.
+    """
+
+    def test_a_group_can_be_chosen(self):
+        path = ROOT / "settings.toml"
+        assert load(path).groups == {}, "ships empty, so nobody's calendar changes silently"
+        out = apply(path.read_text(encoding="utf-8"),
+                    shift(load(path), groups={"192.216": "B"}))
+        assert load_text(out).groups == {"192.216": "B"}
+
+    def test_choosing_a_group_keeps_the_comments_explaining_the_section(self):
+        """Those comments are the only place that says why the setting is needed at all,
+        and the one course it is needed for is the one being edited."""
+        path = ROOT / "settings.toml"
+        text = path.read_text(encoding="utf-8")
+        out = apply(text, shift(load(path), groups={"192.216": "B"}))
+        assert set(comments(text)) <= set(comments(out))
+
+    def test_a_group_can_be_changed_and_cleared(self):
+        path = ROOT / "settings.toml"
+        text = apply(path.read_text(encoding="utf-8"),
+                     shift(load(path), groups={"192.216": "B"}))
+        text = apply(text, shift(load_text(text), groups={"192.216": "A"}))
+        assert load_text(text).groups == {"192.216": "A"}
+        assert load_text(apply(text, shift(load_text(text), groups={}))).groups == {}
+
+
 class TestWritingToDisk:
     def test_the_result_is_always_loadable(self, tmp_path):
         """A writer that can produce a file the loader rejects would leave the project

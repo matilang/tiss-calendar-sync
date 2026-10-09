@@ -1,8 +1,11 @@
 """Which events belong on the calendar at all."""
 from __future__ import annotations
 
+import re
 from datetime import datetime, time
+from typing import Mapping
 
+from . import groups as groups_mod
 from .config import Retention, Semester
 from .model import VIENNA, Lecture
 
@@ -71,6 +74,40 @@ def drop_placeholders(events: list[Lecture], min_hours: float) -> list[Lecture]:
     return kept
 
 
+def keep_chosen_groups(events: list[Lecture], chosen: Mapping[str, str]) -> list[Lecture]:
+    """Drop the exercise slots of groups that are not yours.
+
+    Needed because some courses put every group's appointments in the feed rather than only
+    the one you registered for - 192.216 delivers all three, so 28 of its 42 exercise slots
+    belong to other people. Which courses do that, and why being told is the only way to
+    know, is in groups.py.
+
+    Only events that name a group are candidates. An event with no group marker is a
+    lecture, a Q&A or a plenary session, and those belong to everyone - so switching this
+    on can never remove a lecture, which is the property that makes a wrong letter in the
+    settings file an inconvenience rather than a disaster.
+
+    Scraped events are not reached here: the one that lists every group's name in its
+    description ("3 groups: Exercises Group A (Labs), ...") would otherwise read as another
+    group's event and the registration reminder would vanish. Hence the kind check, which
+    holds wherever in the pipeline this runs rather than relying on it running early.
+    """
+    if not chosen:
+        return events
+    wanted = {nr: groups_mod.wanted(value) for nr, value in chosen.items()}
+
+    kept = []
+    for ev in events:
+        mine = wanted.get(ev.course_nr or "")
+        if not mine or ev.kind != "lecture":
+            kept.append(ev)
+            continue
+        group = groups_mod.group_of(ev.description or "")
+        if not group or group == mine:
+            kept.append(ev)
+    return kept
+
+
 def prune_past(events: list[Lecture], retention: Retention) -> list[Lecture]:
     """Drop events that are over, except the ones worth keeping as a record.
 
@@ -80,12 +117,19 @@ def prune_past(events: list[Lecture], retention: Retention) -> list[Lecture]:
 
     Dropping an event here removes it from `wanted`, so the normal cleanup pass deletes
     it from the calendar - no separate deletion path.
+
+    The keywords match on a word boundary, not as bare substrings. As substrings they kept
+    far more than they named: "Exercise" matched every "Exercises Group B" in the feed, so
+    each course with named groups left its past exercise slots on the calendar for good,
+    and "Test" would match "Latest". A keyword here means a word.
     """
     if not retention.prune_past:
         return events
 
     keep_kinds = set(retention.keep_past_kinds)
-    keep_words = [w.lower() for w in retention.keep_past_keywords]
+    # Leading boundary only, so "Test" still matches "Tests" - plural, not coincidence.
+    keep_words = [re.compile(r"\b" + re.escape(w), re.IGNORECASE)
+                  for w in retention.keep_past_keywords]
     now = datetime.now(VIENNA)
 
     kept = []
@@ -101,7 +145,7 @@ def prune_past(events: list[Lecture], retention: Retention) -> list[Lecture]:
         if ev.kind in keep_kinds:
             kept.append(ev)
             continue
-        if any(w in f"{ev.summary} {ev.description}".lower() for w in keep_words):
+        if any(w.search(f"{ev.summary} {ev.description}") for w in keep_words):
             kept.append(ev)
             continue
     return kept

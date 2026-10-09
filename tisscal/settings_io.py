@@ -40,7 +40,7 @@ from .config import SECTIONS, ConfigError, Settings, from_dict
 SECRET_FIELDS = ("ical_url", "calendar_id")
 
 # Written as a table even though it is a plain field on Settings.
-TABLE_FIELDS = ("titles",)
+TABLE_FIELDS = ("titles", "groups")
 
 
 class WriteError(Exception):
