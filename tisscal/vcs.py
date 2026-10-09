@@ -16,9 +16,18 @@ from pathlib import Path
 
 
 def _git(root: Path, *args: str) -> tuple[int, str, str]:
+    """Run git here. Trailing whitespace goes; leading whitespace is left alone.
+
+    That distinction is not pedantry. `git status --porcelain` puts the two status
+    characters in columns 1-2, so an unstaged change reads " M settings.toml" with a
+    leading space - and stripping it shifted every name one character left. The interface
+    then looked for "settings.toml" in a list containing "ettings.toml", decided the file
+    was committed, and told you the cloud was running what you were looking at while it was
+    not. One space, and the page said the opposite of the truth.
+    """
     done = subprocess.run(("git",) + args, cwd=root, capture_output=True,
                           text=True, encoding="utf-8", errors="replace")
-    return done.returncode, (done.stdout or "").strip(), (done.stderr or "").strip()
+    return done.returncode, (done.stdout or "").rstrip(), (done.stderr or "").strip()
 
 
 def available(root: Path) -> bool:
