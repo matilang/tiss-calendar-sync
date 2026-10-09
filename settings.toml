@@ -98,6 +98,7 @@ color_id = "7"
 "186.814" = "VU Algorithmics"   # already short enough
 "192.174" = "VU ML4Opt"     # Machine Learning for Optimization
 "193.219" = "PR HAI"        # Human-agent Interaction
+"192.216" = "VU EoAI"
 
 [semester]
 # Only events inside this window are synced. Exams and registration deadlines from
