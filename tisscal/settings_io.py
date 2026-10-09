@@ -39,7 +39,18 @@ from .config import SECTIONS, ConfigError, Settings, from_dict
 # Resolved from .secrets.toml or the environment, never written back here.
 SECRET_FIELDS = ("ical_url", "calendar_id")
 
-# Written as a table even though it is a plain field on Settings.
+# Plain fields on Settings that the file nonetheless writes as [sections].
+#
+# `apply` names them so the table is created before the keys go in. That turns out not to
+# be load-bearing: assigning a dict to a tomlkit document produces the same [section] at
+# the end of the file either way, and emptying this tuple breaks no test - checked, after
+# adding `groups` to it on the assumption that it mattered. The branch stays because it
+# states the intent at the point it applies, and because the alternative depends on a
+# tomlkit convenience rather than on anything this module asks for.
+#
+# What does depend on this tuple is tests/test_config.py, which requires every section the
+# loader understands to be documented in settings.toml. SECTIONS covers the dataclasses;
+# this covers the two that are not.
 TABLE_FIELDS = ("titles", "groups")
 
 

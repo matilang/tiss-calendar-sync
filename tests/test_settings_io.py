@@ -28,6 +28,23 @@ def comments(text: str) -> list[str]:
     return [l.strip() for l in text.splitlines() if l.strip().startswith("#")]
 
 
+# Most of this module edits the project's real settings.toml, because that is the file the
+# writer has to preserve and a hand-made sample would not have its comments, its ordering
+# or its annotated arrays. The cost is that a test naming a value from it is a test that
+# fails when the file is legitimately edited - a course finished, a group picked - and a
+# red build for using the tool correctly teaches people to ignore the build.
+#
+# So nothing below names a course it expects to find. Targets are taken from the file, and
+# the one value this module does name is ABSENT, which exists to be absent and says so in
+# its own test.
+def inline_note(text: str, value: str) -> str | None:
+    """The trailing comment on the array line holding `value`, if it has one."""
+    for line in text.splitlines():
+        if f'"{value}"' in line and "#" in line:
+            return line.split("#", 1)[1].strip()
+    return None
+
+
 class TestNothingToWrite:
     @pytest.mark.parametrize("name", COMMITTED)
     def test_saving_an_unchanged_file_leaves_it_byte_identical(self, name):
@@ -68,30 +85,52 @@ class TestCommentsSurvive:
 
     def test_removing_one_course_keeps_the_others_comments(self, tmp_path):
         """The course list is annotated per item. Replacing the array wholesale would be
-        the obvious implementation and would delete five explanations to remove one line."""
+        the obvious implementation and would delete five explanations to remove one line.
+
+        The course removed is whichever one the file lists first, so this keeps testing a
+        real removal as the list changes. Naming one used to make it test nothing: it named
+        193.219, which has not been in [courses] for some time, so the removal was a no-op
+        and the assertions passed on an unmodified file.
+        """
         path = ROOT / "settings.toml"
         text = path.read_text(encoding="utf-8")
-        kept = [c for c in load(path).courses if c != "193.219"]
+        courses = list(load(path).courses)
+        assert len(courses) > 1, "needs a list with something left after a removal"
+        victim, kept = courses[0], courses[1:]
+
         out = apply(text, shift(load(path), courses=kept))
-        assert "# VU Advanced Software Engineering" in out
-        assert "# keeps the TISS holiday / break markers" in out
-        assert "193.219" not in out.split("]")[0]
+
+        assert f'"{victim}"' not in out.split("]")[0], "the removal reached the array"
+        for course in kept:
+            note = inline_note(text, course)
+            if note:
+                assert note in out, f"{course} lost its comment: {note}"
 
     def test_an_inline_comment_survives_its_value_changing(self, tmp_path):
         path = ROOT / "settings.toml"
-        out = apply(path.read_text(encoding="utf-8"),
-                    shift(load(path), titles={**load(path).titles, "186.814": "VU Algo"}))
-        assert '"186.814" = "VU Algo"' in out
-        assert "# already short enough" in out
+        text = path.read_text(encoding="utf-8")
+        titles = dict(load(path).titles)
+        annotated = [nr for nr in titles if inline_note(text, nr)]
+        assert annotated, "[titles] has no annotated entry left to test with"
+
+        nr = annotated[0]
+        out = apply(text, shift(load(path), titles={**titles, nr: "VU Renamed"}))
+        assert f'"{nr}" = "VU Renamed"' in out
+        assert inline_note(text, nr) in out
 
 
 class TestArrays:
+    ABSENT = "184.702"
+
+    def test_the_assumption_this_rests_on(self):
+        assert self.ABSENT not in load(ROOT / "settings.toml").courses
+
     def test_an_item_can_be_appended(self, tmp_path):
         path = ROOT / "settings.toml"
-        new = shift(load(path), courses=list(load(path).courses) + ["184.702"])
+        new = shift(load(path), courses=list(load(path).courses) + [self.ABSENT])
         out = apply(path.read_text(encoding="utf-8"), new)
-        assert "184.702" in out
-        assert load_text(out).courses[-1] == "184.702"
+        assert self.ABSENT in out
+        assert load_text(out).courses[-1] == self.ABSENT
 
     def test_a_reorder_is_written_even_though_the_comments_cannot_survive(self, tmp_path):
         """Documented trade-off: per-item editing cannot express a reorder, so the array
@@ -166,48 +205,112 @@ class TestTheTomlTrap:
 
 
 class TestTitles:
+    ABSENT = "184.702"
+
+    def test_the_assumption_this_rests_on(self):
+        assert self.ABSENT not in load(ROOT / "settings.toml").titles
+
     def test_a_title_can_be_added(self):
         path = ROOT / "settings.toml"
-        new = shift(load(path), titles={**load(path).titles, "184.702": "VU X"})
-        assert load_text(apply(path.read_text(encoding="utf-8"), new)).titles["184.702"] == "VU X"
+        new = shift(load(path), titles={**load(path).titles, self.ABSENT: "VU X"})
+        out = apply(path.read_text(encoding="utf-8"), new)
+        assert load_text(out).titles[self.ABSENT] == "VU X"
 
     def test_a_title_can_be_removed(self):
+        """Removes whichever title the file happens to list first.
+
+        It used to remove 193.219 by name - a course waiting to drop out of the feed, so
+        this test was scheduled to fail on the day that happened, for no reason connected
+        to the writer.
+        """
         path = ROOT / "settings.toml"
-        titles = {k: v for k, v in load(path).titles.items() if k != "193.219"}
+        titles = dict(load(path).titles)
+        assert titles, "[titles] is empty, so there is nothing to remove"
+        victim = next(iter(titles))
+        del titles[victim]
+
         out = apply(path.read_text(encoding="utf-8"), shift(load(path), titles=titles))
-        assert "193.219" not in load_text(out).titles
+        assert victim not in load_text(out).titles
 
 
 class TestGroups:
-    """[groups] is written through the interface, into a section that ships empty.
+    """[groups] is written through the interface's dropdown.
 
     It is the first setting whose value nobody can derive - which group you registered for
-    is not in the feed - so the path from a dropdown to the file has to work on a section
-    that has a heading, a page of comments and no keys at all.
+    is not in the feed anywhere - so the path from a dropdown to the file is all there is.
+
+    Nothing here asserts what [groups] currently holds. The first version of this class
+    did, and it failed the first time the feature was used for real: a test that pins down
+    a value the user is *expected* to change turns using the tool into a red build. The
+    rule it broke is the same one TestAnnotatesAdditions follows below - a test may state
+    an assumption about settings.toml and fail loudly if it stops holding, but it may not
+    quietly depend on one.
     """
+    ABSENT = "184.702"
+
+    def test_the_assumption_this_rests_on(self):
+        assert self.ABSENT not in load(ROOT / "settings.toml").groups
+
+    def _with_group(self, value: str, *, text: str | None = None) -> str:
+        path = ROOT / "settings.toml"
+        text = text if text is not None else path.read_text(encoding="utf-8")
+        current = load_text(text)
+        return apply(text, shift(current, groups={**current.groups, self.ABSENT: value}))
 
     def test_a_group_can_be_chosen(self):
-        path = ROOT / "settings.toml"
-        assert load(path).groups == {}, "ships empty, so nobody's calendar changes silently"
-        out = apply(path.read_text(encoding="utf-8"),
-                    shift(load(path), groups={"192.216": "B"}))
-        assert load_text(out).groups == {"192.216": "B"}
+        assert load_text(self._with_group("B")).groups[self.ABSENT] == "B"
+
+    @pytest.mark.parametrize("field, value",
+                             [("groups", {"192.216": "B"}), ("titles", {"192.216": "EoAI"})])
+    def test_the_section_is_created_when_the_file_has_none(self, tmp_path, field, value):
+        """Both of these are plain fields on Settings that the file writes as sections.
+
+        Every other test here edits the project's own settings.toml, which already has
+        both sections, so none of them covered writing one that is not there - and that is
+        not a hypothetical file: settings.tuwel.toml has neither, nor does any settings
+        file written before an option existed.
+
+        What this does not test is TABLE_FIELDS, though it was written to. Emptying that
+        tuple leaves every test green, because assigning a dict to a tomlkit document
+        yields the same [section] regardless. The guarantee worth having is the one
+        asserted below: the value ends up in a section of its own and not as a bare key
+        swallowed by the preceding one - which is the trap settings.toml's own header
+        warns about, and the thing that would actually corrupt a config.
+        """
+        path = tmp_path / "settings.toml"
+        path.write_text('courses = ["186.814"]\n\n[semester]\nstart = "2026-10-01"\n',
+                        encoding="utf-8")
+        text = path.read_text(encoding="utf-8")
+        assert f"[{field}]" not in text
+
+        out = apply(text, shift(load(path), **{field: value}))
+        assert f"[{field}]" in out, f"{field} was not written as a section"
+        assert getattr(load_text(out), field) == value
+        assert load_text(out).semester.start.isoformat() == "2026-10-01", \
+            "the value did not land inside the preceding section"
+
+    def test_choosing_one_leaves_the_other_courses_alone(self):
+        """The whole file is rewritten on every save, so "it only changed what I picked"
+        is a property worth asserting rather than assuming."""
+        before = load(ROOT / "settings.toml").groups
+        after = load_text(self._with_group("B")).groups
+        assert {k: v for k, v in after.items() if k != self.ABSENT} == dict(before)
 
     def test_choosing_a_group_keeps_the_comments_explaining_the_section(self):
-        """Those comments are the only place that says why the setting is needed at all,
-        and the one course it is needed for is the one being edited."""
-        path = ROOT / "settings.toml"
-        text = path.read_text(encoding="utf-8")
-        out = apply(text, shift(load(path), groups={"192.216": "B"}))
-        assert set(comments(text)) <= set(comments(out))
+        """Those comments are the only place that says why the setting exists at all, and
+        the section is short enough that a writer could plausibly replace it wholesale."""
+        text = (ROOT / "settings.toml").read_text(encoding="utf-8")
+        assert set(comments(text)) <= set(comments(self._with_group("B")))
 
     def test_a_group_can_be_changed_and_cleared(self):
-        path = ROOT / "settings.toml"
-        text = apply(path.read_text(encoding="utf-8"),
-                     shift(load(path), groups={"192.216": "B"}))
-        text = apply(text, shift(load_text(text), groups={"192.216": "A"}))
-        assert load_text(text).groups == {"192.216": "A"}
-        assert load_text(apply(text, shift(load_text(text), groups={}))).groups == {}
+        text = self._with_group("B")
+        text = self._with_group("A", text=text)
+        assert load_text(text).groups[self.ABSENT] == "A"
+
+        current = load_text(text)
+        cleared = {k: v for k, v in current.groups.items() if k != self.ABSENT}
+        out = apply(text, shift(current, groups=cleared))
+        assert self.ABSENT not in load_text(out).groups
 
 
 class TestWritingToDisk:

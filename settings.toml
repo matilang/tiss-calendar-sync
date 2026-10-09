@@ -124,13 +124,11 @@ color_id = "7"
 # same group, as do "3" and "3_11:00-12:00" - so whatever you copy out of TISS works.
 # An event that names no group at all is never dropped, so this cannot hide a lecture.
 #
-# Left empty on purpose: picking a group for someone removes the other groups' slots from
-# their calendar, and guessing wrong removes theirs. Pick it in the Group column of
-# `python tiss_sync.py ui`, which lists the groups the feed actually has and how many
-# events each one would take away.
-#
-#   "192.216" = "B"
-"192.216" = "B"
+# Pick these in the Group column of `python tiss_sync.py ui` rather than by hand: it lists
+# the groups the feed actually has, how many events each one holds, and shows exactly
+# which events come off the calendar before anything is saved. Typing a letter that no
+# group matches removes every exercise slot of the course instead.
+"192.216" = "B"     # Wednesdays 12-14
 
 [semester]
 # Only events inside this window are synced. Exams and registration deadlines from
